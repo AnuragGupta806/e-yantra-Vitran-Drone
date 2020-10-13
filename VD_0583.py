@@ -77,7 +77,7 @@ def revolve(r, speed, n):
     velocity_message.linear.x = 0
     velocity_message.angular.z = 0
     velocity_publisher.publish(velocity_message)    # publishing the zero velocity to stop
-    rospy.loginfo("destination reached")
+    rospy.loginfo(str(n) + "revolutions completed!!")
 
 #main function
 def main():    
