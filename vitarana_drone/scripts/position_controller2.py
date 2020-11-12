@@ -24,15 +24,15 @@ import tf
 class Edrone():
     """docstring for Edrone"""
     def __init__(self):
-        rospy.init_node('position_controller2')  # initializing ros node with name position_controller
+        rospy.init_node('position_controller2', disable_signals = True)  # initializing ros node with name position_controller
 
         # This will contain the current location of Edrone. [latitude, longitude, altitude ]
         # this value is updating each time in gps callback function
         self.drone_location = [0.0, 0.0, 0.0]
 
         # This is the setpoint of location. [latitude , longitude, altitude ]
-        self.setpoint_location = [19.0, 72.0, 3.0]
-
+        self.setpoint_location = [19.0, 72.0, 3.0] #To store the intermediate setpoints
+        self.setpoint_final = [19.0, 72.0, 3.0]  #To store the final setpoint
         # This will contain the current orientation of eDrone in quaternion format. [x,y,z,w]
         # This value is updating each time in imu callback function
         self.drone_orientation_quaternion = [0.0, 0.0, 0.0, 0.0]
@@ -145,7 +145,9 @@ class Edrone():
         self.Kp[2] = yaw.Kp * 0.06 
         self.Ki[2] = yaw.Ki * 0.008
         self.Kd[2] = yaw.Kd * 30
-    
+
+    def is_at_setpoint(self,setpoint):
+        return (e_drone.drone_location[0] > setpoint[0]+0.000004517 or e_drone.drone_location[0] < setpoint[0]-0.000004517) or (e_drone.drone_location[1] >  setpoint[1]+0.0000047487 or e_drone.drone_location[1] < setpoint[1]-0.0000047487) or (e_drone.drone_location[2] > setpoint[2]+0.2 or e_drone.drone_location[2] < setpoint[2]-0.2)
 
     # this function is containing all the pid equation to control the position of the drone
     def pid(self):
@@ -216,129 +218,63 @@ class Edrone():
 
 # main function, it will move the drone at all three points to reach the destination.
 def main():
-    e_drone.pid()
+    #e_drone.pid()
 
-    e_drone.setpoint_location = [19.0009248718, 71.9998318945, 25]
-    while ((e_drone.drone_location[0] > e_drone.setpoint_location[0]+0.000004517 or e_drone.drone_location[0] < e_drone.setpoint_location[0]-0.000004517) or (e_drone.drone_location[1] >  e_drone.setpoint_location[1]+0.0000047487 or e_drone.drone_location[1] < e_drone.setpoint_location[1]-0.0000047487) or (e_drone.drone_location[2] > e_drone.setpoint_location[2]+0.2 or e_drone.drone_location[2] < e_drone.setpoint_location[2]-0.2)):
-        e_drone.pid()
-        time.sleep(0.05)
-    t = time.time()
-    while time.time() -t < 10:
-        e_drone.pid()
-        time.sleep(0.05)
+    #e_drone.setpoint_location = [19.0009248718, 71.9998318945, 25]
+    e_drone.setpoint_final = [19.0007046575, 71.9998955286, 22.15]
+    #e_drone.setpoint_final = [20,72.1,22.15]
+    #if drone is at lower altitude first raise its altitude
+    if(e_drone.setpoint_final[2] > e_drone.drone_location[2] or e_drone.drone_location[2] < 24):
+        e_drone.setpoint_location = e_drone.drone_location[:-1] + [26]
+        while(e_drone.is_at_setpoint(e_drone.setpoint_location)):
+            e_drone.pid()
+            time.sleep(0.05)
 
+    e_drone.setpoint_location[2] = e_drone.drone_location[2]
+    rospy.loginfo("Reached Desired Altitude:")
+    rospy.loginfo(e_drone.setpoint_location[2])
+    slope = Float32()
+    cos = Float32()
+    sin = Float32()
+    slope = ((e_drone.setpoint_final[1]-e_drone.drone_location[1])/(e_drone.setpoint_final[0]-e_drone.drone_location[0]))
+    cos = np.sqrt(1 + slope**2)
+    cos = 1/cos
+    sin = np.sqrt(1-cos**2)
+    f1 = 0.00005
+    f2 = 0.00005
+    rospy.loginfo(sin)
+    rospy.loginfo(cos)
 
-    e_drone.setpoint_location = [19.0008046575, 71.9998655286, 25]
-    while ((e_drone.drone_location[0] > e_drone.setpoint_location[0]+0.000004517 or e_drone.drone_location[0] < e_drone.setpoint_location[0]-0.000004517) or (e_drone.drone_location[1] >  e_drone.setpoint_location[1]+0.0000047487 or e_drone.drone_location[1] < e_drone.setpoint_location[1]-0.0000047487) or (e_drone.drone_location[2] > e_drone.setpoint_location[2]+0.2 or e_drone.drone_location[2] < e_drone.setpoint_location[2]-0.2)):
-        e_drone.pid()
-        time.sleep(0.05)
-    # t = time.time()
-    # while time.time() -t < 10:
-    #     e_drone.pid()
-    #     time.sleep(0.05)
-    
+    if e_drone.setpoint_final[0] < e_drone.drone_location[0] and cos > 0:
+        cos *= -1
+    if e_drone.setpoint_final[1] < e_drone.drone_location[1] and sin > 0:
+        sin *= -1
 
-    e_drone.setpoint_location = [19.0007046575, 71.9998955286, 25]
-    while ((e_drone.drone_location[0] > e_drone.setpoint_location[0]+0.000004517 or e_drone.drone_location[0] < e_drone.setpoint_location[0]-0.000004517) or (e_drone.drone_location[1] >  e_drone.setpoint_location[1]+0.0000047487 or e_drone.drone_location[1] < e_drone.setpoint_location[1]-0.0000047487) or (e_drone.drone_location[2] > e_drone.setpoint_location[2]+0.2 or e_drone.drone_location[2] < e_drone.setpoint_location[2]-0.2)):
-        e_drone.pid()
-        time.sleep(0.05)
-    t = time.time()
-    while time.time() -t < 10:
-        e_drone.pid()
-        time.sleep(0.05)
+    while(e_drone.is_at_setpoint(e_drone.setpoint_final)):
+        e_drone.setpoint_location = [e_drone.drone_location[0] + f1*cos, e_drone.drone_location[1]+ f2*sin, e_drone.setpoint_location[2]]
 
+        #If setpoint_location become less or more than setpoint_final
+        if ((cos > 0 and e_drone.setpoint_location[0] > e_drone.setpoint_final[0]) or (cos < 0 and e_drone.setpoint_location[0] < e_drone.setpoint_final[0])):
+            e_drone.setpoint_location = e_drone.setpoint_final
+        if ((sin > 0 and e_drone.setpoint_location[1] > e_drone.setpoint_final[1]) or (sin < 0 and e_drone.setpoint_location[1] < e_drone.setpoint_final[1])):
+            e_drone.setpoint_location = e_drone.setpoint_final
 
-    e_drone.setpoint_location = [19.0007046575, 71.9998955286, 22.15]
-    while ((e_drone.drone_location[0] > e_drone.setpoint_location[0]+0.000004517 or e_drone.drone_location[0] < e_drone.setpoint_location[0]-0.000004517) or (e_drone.drone_location[1] >  e_drone.setpoint_location[1]+0.0000047487 or e_drone.drone_location[1] < e_drone.setpoint_location[1]-0.0000047487) or (e_drone.drone_location[2] > e_drone.setpoint_location[2]+0.2 or e_drone.drone_location[2] < e_drone.setpoint_location[2]-0.2)):
-        e_drone.pid()
-        time.sleep(0.05)
-    t = time.time()
-    while time.time() -t < 10:
-        e_drone.pid()
-        time.sleep(0.05)
+        rospy.loginfo(e_drone.setpoint_location)
+        while (e_drone.is_at_setpoint(e_drone.setpoint_location)):
+            e_drone.pid()
+            time.sleep(0.05)
 
-    # turning off the drone
-    e_drone.rpyt_cmd.rcRoll = 1500
-    e_drone.rpyt_cmd.rcPitch = 1500
-    e_drone.rpyt_cmd.rcYaw = 1500
-    e_drone.rpyt_cmd.rcThrottle = 1000
-    e_drone.rpyt_pub.publish(e_drone.rpyt_cmd)
-
-    t = time.time()
-    while time.time() -t < 30:
-        e_drone.rpyt_cmd.rcRoll = 1500
-        e_drone.rpyt_cmd.rcPitch = 1500
-        e_drone.rpyt_cmd.rcYaw = 1500
-        e_drone.rpyt_cmd.rcThrottle = 1000
-        e_drone.rpyt_pub.publish(e_drone.rpyt_cmd)
-
-
-    e_drone.setpoint_location = [19.0007046575, 71.9998955286, 26]
-    while ((e_drone.drone_location[0] > e_drone.setpoint_location[0]+0.000004517 or e_drone.drone_location[0] < e_drone.setpoint_location[0]-0.000004517) or (e_drone.drone_location[1] >  e_drone.setpoint_location[1]+0.0000047487 or e_drone.drone_location[1] < e_drone.setpoint_location[1]-0.0000047487) or (e_drone.drone_location[2] > e_drone.setpoint_location[2]+0.2 or e_drone.drone_location[2] < e_drone.setpoint_location[2]-0.2)):
-        e_drone.pid()
-        time.sleep(0.05)
-    t = time.time()
-    while time.time() -t < 10:
-        e_drone.pid()
-        time.sleep(0.05)
-
+    rospy.loginfo("Reached Desired Position")
+    #To hover on the destination
     while True:
         e_drone.pid()
         time.sleep(0.05) 
-
-
-    # rospy.loginfo("drone started from : " + str(e_drone.drone_location))
-
-    # # seting setpoint to first point
-    # e_drone.setpoint_location = [19.0, 72.0, 3]
-    # # running the loop until dron reaches the point under its tolerences 
-    # while ((e_drone.drone_location[0] > 19.0+0.000004517 or e_drone.drone_location[0] < 19.0-0.000004517) or (e_drone.drone_location[1] >  72.0+0.0000047487 or e_drone.drone_location[1] < 72.0-0.0000047487) or (e_drone.drone_location[2] > 3.0+0.2 or e_drone.drone_location[2] < 3.0-0.2)):
-    #     e_drone.pid()
-    #     time.sleep(0.05)
-    # # pause of 10 sec to stablize the drone at that position
-    # t = time.time()
-    # while time.time() -t < 10:
-    #     e_drone.pid()
-    #     time.sleep(0.05)
-
-    # rospy.loginfo("drone reached point : "+ str(e_drone.drone_location))
-
-    # # seting setpoint to second point
-    # e_drone.setpoint_location = [19.0000451704, 72.0, 3]
-    # # running the loop until dron reaches the point under its tolerences 
-    # while ((e_drone.drone_location[0] > 19.00004517040+0.000004517 or e_drone.drone_location[0] < 19.00004517040-0.000004517) or (e_drone.drone_location[1] >  72.0+0.0000047487 or e_drone.drone_location[1] < 72.0-0.0000047487) or (e_drone.drone_location[2] > 3.0+0.2 or e_drone.drone_location[2] < 3.0-0.2)):
-    #     e_drone.pid()
-    #     time.sleep(0.05)
-    # # pause of 10 sec to stablize the drone at that position
-    # t = time.time()
-    # while time.time() -t < 10:
-    #     e_drone.pid()
-    #     time.sleep(0.05)
-
-    # rospy.loginfo("drone reached point : "+ str(e_drone.drone_location))
-
-    # # seting setpoint to final point
-    # e_drone.setpoint_location = [19.0000451704, 72.0, 0.31]
-    # # running the loop until dron reaches the point under its tolerences 
-    # while ((e_drone.drone_location[0] > 19.00004517040+0.000004517 or e_drone.drone_location[0] < 19.00004517040-0.000004517) or (e_drone.drone_location[1] >  72.0+0.0000047487 or e_drone.drone_location[1] < 72.0-0.0000047487) or (e_drone.drone_location[2] > 0.31+0.2 or e_drone.drone_location[2] < 0.31-0.2)):
-    #     e_drone.pid()
-    #     time.sleep(0.05)
-    # # pause of 10 sec to stablize the drone at that position
-    # t = time.time()
-    # while time.time() -t < 10:
-    #     e_drone.pid()
-    #     time.sleep(0.05)
-
-
-    # rospy.loginfo("drone reached point : "+ str(e_drone.drone_location))
-    # rospy.loginfo("destination reached!!!")
-
 
 if __name__ == '__main__':
 
     # pause of 4 sec to open and load the gazibo
     t = time.time()
-    while time.time() -t < 4:
+    while time.time() -t < 20:
         pass
 
     # making e_drone object of Edrone class
