@@ -266,6 +266,26 @@ def main():
 
     rospy.loginfo("Reached Desired Position")
     #To hover on the destination
+    t = time.time()
+    while time.time() -t < 10:
+        e_drone.pid()
+        time.sleep(0.05)
+    # turning off the drone
+    e_drone.rpyt_cmd.rcRoll = 1500
+    e_drone.rpyt_cmd.rcPitch = 1500
+    e_drone.rpyt_cmd.rcYaw = 1500
+    e_drone.rpyt_cmd.rcThrottle = 1000
+    e_drone.rpyt_pub.publish(e_drone.rpyt_cmd)
+
+    t = time.time()
+    while time.time() -t < 30:
+        e_drone.rpyt_cmd.rcRoll = 1500
+        e_drone.rpyt_cmd.rcPitch = 1500
+        e_drone.rpyt_cmd.rcYaw = 1500
+        e_drone.rpyt_cmd.rcThrottle = 1000
+        e_drone.rpyt_pub.publish(e_drone.rpyt_cmd)
+
+    e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [26]
     while True:
         e_drone.pid()
         time.sleep(0.05) 
