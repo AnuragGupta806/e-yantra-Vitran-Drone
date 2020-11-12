@@ -229,7 +229,7 @@ def main():
         while(e_drone.is_at_setpoint(e_drone.setpoint_location)):
             e_drone.pid()
             time.sleep(0.05)
-            
+
     #Applying parametric form of line
     e_drone.setpoint_location[2] = e_drone.drone_location[2]
     rospy.loginfo("Reached Desired Altitude:")
@@ -251,22 +251,22 @@ def main():
     if e_drone.setpoint_final[1] < e_drone.drone_location[1] and sin > 0:
         sin *= -1
 
-    flag = False
+    #flag = False
     while(e_drone.is_at_setpoint(e_drone.setpoint_final)):
         e_drone.setpoint_location = [e_drone.drone_location[0] + f1*cos, e_drone.drone_location[1]+ f2*sin, e_drone.setpoint_location[2]]
 
         #If setpoint_location become less or more than setpoint_final
         if ((cos > 0 and e_drone.setpoint_location[0] > e_drone.setpoint_final[0]) or (cos < 0 and e_drone.setpoint_location[0] < e_drone.setpoint_final[0])):
             e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_location[2]]
-            flag = True
+            #flag = True
         if ((sin > 0 and e_drone.setpoint_location[1] > e_drone.setpoint_final[1]) or (sin < 0 and e_drone.setpoint_location[1] < e_drone.setpoint_final[1])):
             e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_location[2]]
-            flag = True
+            #flag = True
         rospy.loginfo(e_drone.setpoint_location)
         while (e_drone.is_at_setpoint(e_drone.setpoint_location)):
             e_drone.pid()
             time.sleep(0.05)
-        if flag:
+        if e_drone.setpoint_location[:-1] == e_drone.setpoint_final[:-1]:
             break
 
     rospy.loginfo("Descending the drone on the setpoint")
