@@ -14,13 +14,14 @@ from vitarana_drone.msg import *
 from pid_tune.msg import PidTune
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import Imu
+from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float32
 import rospy
 import numpy as np
 import time
 import tf
-
-
+import os
+import math
 class Edrone():
     """docstring for Edrone"""
     def __init__(self):
@@ -70,6 +71,10 @@ class Edrone():
         self.altitude_Low = Float32()
         self.altitude_Low.data = -0.2
 
+        self.laser_front = 0
+        self.laser_left = 0
+        self.laser_right = 0
+        self.laser_rear = 0
         # initializing Kp, Kd and ki for [latitude, longitude, altitude] after tunning 
         self.Kp = [1080000, 1140000, 48]
         self.Ki = [0, 0, 0]
@@ -101,10 +106,15 @@ class Edrone():
         # Subscribing to /edrone/gps, /pid_tuning_roll, /pid_tuning_pitch, /pid_tuning_yaw {used these GUIs only to tune ;-) }
         rospy.Subscriber('/edrone/gps', NavSatFix, self.gps_callback)
         rospy.Subscriber('/edrone/imu/data', Imu, self.imu_callback)
+        rospy.Subscriber('/edrone/range_finder_top',LaserScan,self.range_finder_callback)
         # rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)        # for latitude
         # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)      # for longitude
         # rospy.Subscriber('/pid_tuning_yaw', PidTune, self.yaw_set_pid)          # for altitude
     
+    #Callback function for LaserScan
+    def range_finder_callback(self, msg):
+        self.laser_right,self.laser_rear,self.laser_left,self.laser_front = msg.ranges[:-1]
+        print(self.laser_front)
 
     # Imu callback function. The function gets executed each time when imu publishes /edrone/imu/data
     def imu_callback(self, msg):
@@ -146,42 +156,7 @@ class Edrone():
         self.Ki[2] = yaw.Ki * 0.008
         self.Kd[2] = yaw.Kd * 30
 
-    def is_at_setpoint(self,setpoint):
-        return (e_drone.drone_location[0] > setpoint[0]+0.000004517 or e_drone.drone_location[0] < setpoint[0]-0.000004517) or (e_drone.drone_location[1] >  setpoint[1]+0.0000047487 or e_drone.drone_location[1] < setpoint[1]-0.0000047487) or (e_drone.drone_location[2] > setpoint[2]+0.2 or e_drone.drone_location[2] < setpoint[2]-0.2)
-
-    # this function is containing all the pid equation to control the position of the drone
-    def pid(self):
-        # updating all the error values to be used in PID equation
-        for i in range(3):
-            self.error_value[i] = self.setpoint_location[i] - self.drone_location[i]
-            self.sum_error_value[i] = self.sum_error_value[i] + self.error_value[i]
-            self.change_in_error_value[i] = self.error_value[i] - self.prev_error_value[i]
-            self.prev_error_value[i] = self.error_value[i]
-
-        # assigning error value to its container to publish
-        self.latitude_Error.data = self.error_value[0]
-        self.longitude_Error.data = self.error_value[1]
-        self.altitude_Error.data = self.error_value[2]
-
-        # PID eqation for latitude
-        output0 = self.Kp[0]*self.error_value[0] + self.Ki[0]*self.sum_error_value[0] + self.Kd[0]*self.change_in_error_value[0]
-        
-        # PID eqation for longitude
-        output1 = self.Kp[1]*self.error_value[1] + self.Ki[1]*self.sum_error_value[1] + self.Kd[1]*self.change_in_error_value[1]
-        
-        # PID equation for altitude
-        output2 = self.Kp[2]*self.error_value[2] + self.Ki[2]*self.sum_error_value[2] + self.Kd[2]*self.change_in_error_value[2]
-        
-        # updating the roll value according to PID output. 
-        # {this equation will work fine when there is some yaw. to see detail opne --> https://drive.google.com/file/d/14gjse4HUIi9OoznefjOehh1HU6LUhoO7/view?usp=sharing }
-        self.rpyt_cmd.rcRoll = 1500 + output0*np.cos(self.drone_orientation_euler[2]) - output1*np.sin(self.drone_orientation_euler[2])
-
-        # updating the pitch value according to PID output
-        self.rpyt_cmd.rcPitch = 1500 + output0*np.sin(self.drone_orientation_euler[2]) + output1*np.cos(self.drone_orientation_euler[2])
-
-        # updating the throttle value according to PID output
-        self.rpyt_cmd.rcThrottle = 1500 + output2
-        
+    def publish_data(self):
         # checking the boundary conditions for roll value
         if(self.rpyt_cmd.rcRoll > 1800):
             self.rpyt_cmd.rcRoll = 1800
@@ -216,24 +191,79 @@ class Edrone():
         self.altitude_low.publish(self.altitude_Low)
 
 
-# main function, it will move the drone at all three points to reach the destination.
-def main():
-    #e_drone.pid()
+    # this function is containing all the pid equation to control the position of the drone
+    def pid(self):
+        # updating all the error values to be used in PID equation
+        for i in range(3):
+            self.error_value[i] = self.setpoint_location[i] - self.drone_location[i]
+            self.sum_error_value[i] = self.sum_error_value[i] + self.error_value[i]
+            self.change_in_error_value[i] = self.error_value[i] - self.prev_error_value[i]
+            self.prev_error_value[i] = self.error_value[i]
 
-    #e_drone.setpoint_location = [19.0009248718, 71.9998318945, 25]
-    e_drone.setpoint_final = [19.0007046575, 71.9998955286, 22.15]
-    #e_drone.setpoint_final = [20,72.1,22.15]
+        # assigning error value to its container to publish
+        self.latitude_Error.data = self.error_value[0]
+        self.longitude_Error.data = self.error_value[1]
+        self.altitude_Error.data = self.error_value[2]
+
+        # PID eqation for latitude
+        output0 = self.Kp[0]*self.error_value[0] + self.Ki[0]*self.sum_error_value[0] + self.Kd[0]*self.change_in_error_value[0]
+        
+        # PID eqation for longitude
+        output1 = self.Kp[1]*self.error_value[1] + self.Ki[1]*self.sum_error_value[1] + self.Kd[1]*self.change_in_error_value[1]
+        
+        # PID equation for altitude
+        output2 = self.Kp[2]*self.error_value[2] + self.Ki[2]*self.sum_error_value[2] + self.Kd[2]*self.change_in_error_value[2]
+        
+        # updating the roll value according to PID output. 
+        # {this equation will work fine when there is some yaw. to see detail opne --> https://drive.google.com/file/d/14gjse4HUIi9OoznefjOehh1HU6LUhoO7/view?usp=sharing }
+        self.rpyt_cmd.rcRoll = 1500 + output0*np.cos(self.drone_orientation_euler[2]) - output1*np.sin(self.drone_orientation_euler[2])
+
+        # updating the pitch value according to PID output
+        self.rpyt_cmd.rcPitch = 1500 + output0*np.sin(self.drone_orientation_euler[2]) + output1*np.cos(self.drone_orientation_euler[2])
+
+        # updating the throttle value according to PID output
+        self.rpyt_cmd.rcThrottle = 1500 + output2
+        
+        self.publish_data()
+        
+
+def is_at_setpoint(setpoint):
+        return ((e_drone.drone_location[0] > setpoint[0]+0.000004517 or e_drone.drone_location[0] < setpoint[0]-0.000004517) or 
+            (e_drone.drone_location[1] >  setpoint[1]+0.0000047487 or e_drone.drone_location[1] < setpoint[1]-0.0000047487) or 
+                (e_drone.drone_location[2] > setpoint[2]+0.2 or e_drone.drone_location[2] < setpoint[2]-0.2))
+
+def avoid_obstacle(prev_ranges):
+    altitude = e_drone.drone_location[2]
+    delta_altitude = 0
+    print("Avoiding Obstacles")
+    while(e_drone.laser_front <= 6):
+    
+        if delta_altitude <= 6:
+            while(not e_drone.laser_front >= 20):
+                e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5] 
+                delta_altitude = e_drone.drone_location[2] - altitude
+                e_drone.pid()
+                time.sleep(0.05)
+        
+        '''if(e_drone.laser_left >= 4):
+            while (e_drone.laser_front <= 10):
+                e_drone.setpoint_location = [e_drone.drone_location[0], e_drone.drone_location[1]- 0.00005, e_drone.drone_location[2]]
+                e_drone.pid()
+                time.sleep(0.05)'''
+            
+def reach_destination():
+    
     #if drone is at lower altitude first raise its altitude
+    #rospy.loginfo("Destination is:")
+    #rospy.loginfo(e_drone.setpoint_final)
     if(e_drone.setpoint_final[2] > e_drone.drone_location[2] or e_drone.drone_location[2] < 24):
         e_drone.setpoint_location = e_drone.drone_location[:-1] + [26]
-        while(e_drone.is_at_setpoint(e_drone.setpoint_location)):
+        while(is_at_setpoint(e_drone.setpoint_location)):
             e_drone.pid()
             time.sleep(0.05)
 
     #Applying parametric form of line
     e_drone.setpoint_location[2] = e_drone.drone_location[2]
-    rospy.loginfo("Reached Desired Altitude:")
-    rospy.loginfo(e_drone.setpoint_location[2])
     slope = Float32()
     cos = Float32()
     sin = Float32()
@@ -243,40 +273,51 @@ def main():
     sin = np.sqrt(1-cos**2)
     f1 = 0.00005
     f2 = 0.00005
-    rospy.loginfo(sin)
-    rospy.loginfo(cos)
 
     if e_drone.setpoint_final[0] < e_drone.drone_location[0] and cos > 0:
         cos *= -1
     if e_drone.setpoint_final[1] < e_drone.drone_location[1] and sin > 0:
         sin *= -1
 
-    #flag = False
-    while(e_drone.is_at_setpoint(e_drone.setpoint_final)):
+    prev_ranges = [e_drone.laser_front, e_drone.laser_left, e_drone.laser_right]
+    while(is_at_setpoint(e_drone.setpoint_final)):
         e_drone.setpoint_location = [e_drone.drone_location[0] + f1*cos, e_drone.drone_location[1]+ f2*sin, e_drone.setpoint_location[2]]
 
         #If setpoint_location become less or more than setpoint_final
         if ((cos > 0 and e_drone.setpoint_location[0] > e_drone.setpoint_final[0]) or (cos < 0 and e_drone.setpoint_location[0] < e_drone.setpoint_final[0])):
             e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_location[2]]
-            #flag = True
+            
         if ((sin > 0 and e_drone.setpoint_location[1] > e_drone.setpoint_final[1]) or (sin < 0 and e_drone.setpoint_location[1] < e_drone.setpoint_final[1])):
             e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_location[2]]
-            #flag = True
-        rospy.loginfo(e_drone.setpoint_location)
-        while (e_drone.is_at_setpoint(e_drone.setpoint_location)):
+            
+        #rospy.loginfo(e_drone.setpoint_location)
+        while (is_at_setpoint(e_drone.setpoint_location)):
+            if e_drone.laser_front <= 10:
+                avoid_obstacle(prev_ranges)
             e_drone.pid()
             time.sleep(0.05)
         if e_drone.setpoint_location[:-1] == e_drone.setpoint_final[:-1]:
             break
 
-    rospy.loginfo("Descending the drone on the setpoint")
+    #Descending the drone on the setpoint
     e_drone.setpoint_location = e_drone.setpoint_final
-    while (e_drone.is_at_setpoint(e_drone.setpoint_location)):
-        e_drone.pid()
+    while (is_at_setpoint(e_drone.setpoint_location)):
+        e_drone.pid() 
         time.sleep(0.05)
 
     rospy.loginfo("Reached Desired Position")
-    #To hover on the destination
+    rospy.loginfo(e_drone.setpoint_final)
+
+def toggle_gripper():
+    os.chdir("/home/mehul/Desktop/eyantra/catkin_ws/devel/")
+    os.system('source setup.bash')
+    os.system('rosservice call /edrone/activate_gripper "activate_gripper: true"')
+
+def pick_parcel():
+    
+    e_drone.setpoint_final = [19.0007046575, 71.9998955286, 22.15]
+    reach_destination()
+    #To settle on the destination
     t = time.time()
     while time.time() -t < 10:
         e_drone.pid()
@@ -289,17 +330,35 @@ def main():
     e_drone.rpyt_pub.publish(e_drone.rpyt_cmd)
 
     t = time.time()
-    while time.time() -t < 30:
+    gripped = False
+    while time.time() -t < 20:
         e_drone.rpyt_cmd.rcRoll = 1500
         e_drone.rpyt_cmd.rcPitch = 1500
         e_drone.rpyt_cmd.rcYaw = 1500
         e_drone.rpyt_cmd.rcThrottle = 1000
         e_drone.rpyt_pub.publish(e_drone.rpyt_cmd)
-
+        if time.time() - t >= 10 and not gripped:
+            toggle_gripper()
+            gripped = True
+'''
     e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [26]
+
+    #To hover on the destination
     while True:
         e_drone.pid()
         time.sleep(0.05) 
+'''
+
+
+
+# main function, it will move the drone at all three points to reach the destination.
+def main():
+    #time.sleep(1000000)
+    pick_parcel()
+    e_drone.setpoint_final = [19.0, 72.0, 8.44]
+    reach_destination()
+    toggle_gripper()
+    rospy.loginfo("Package Delivered")
 
 if __name__ == '__main__':
 
