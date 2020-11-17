@@ -292,7 +292,8 @@ def avoid_obstacle():
     # delta_altitude = 0
     # print("Avoiding Obstacles")
     flag =0
-    while(e_drone.laser_negative_latitude <= 6): # or e_drone.laser_positive_latitude <= 6 or e_drone.laser_negative_longitude <= 6 or e_drone.laser_positive_longitude <= 6):
+    while((e_drone.laser_negative_latitude <= 6 and e_drone.laser_negative_latitude >= 0.5) or (e_drone.laser_positive_latitude <= 6 and e_drone.laser_positive_latitude >= 0.5) or 
+            (e_drone.laser_negative_longitude <= 6 and e_drone.laser_negative_longitude >= 0.5) or (e_drone.laser_negative_longitude <= 6 and e_drone.laser_negative_longitude >= 0.5)):
         e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5] 
         e_drone.pid()
         time.sleep(0.05)
