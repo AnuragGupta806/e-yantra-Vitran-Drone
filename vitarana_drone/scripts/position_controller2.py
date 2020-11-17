@@ -291,12 +291,20 @@ def avoid_obstacle():
     # altitude = e_drone.drone_location[2]
     # delta_altitude = 0
     # print("Avoiding Obstacles")
+    flag =0
     while(e_drone.laser_negative_latitude <= 6): # or e_drone.laser_positive_latitude <= 6 or e_drone.laser_negative_longitude <= 6 or e_drone.laser_positive_longitude <= 6):
         e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5] 
         e_drone.pid()
         time.sleep(0.05)
         print(e_drone.laser_negative_latitude, e_drone.laser_positive_latitude, e_drone.laser_negative_longitude, e_drone.laser_positive_longitude)
-        
+        flag =1
+
+    if(flag):
+        e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 3]
+        while (is_at_setpoint3D(e_drone.setpoint_location)):
+            e_drone.pid()
+            time.sleep(0.05)
+
         # if delta_altitude <= 6:
         #     while(not e_drone.laser_negative_latitude >= 20):
         #         e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5] 
@@ -383,6 +391,11 @@ def reach_destination():
     #         break
 
     #Descending the drone on the setpoint
+    t = time.time()
+    while time.time() -t < 10:
+        e_drone.pid()
+        time.sleep(0.05)
+
     e_drone.setpoint_location = e_drone.setpoint_final
     while (is_at_setpoint3D(e_drone.setpoint_location)):
         e_drone.pid() 
