@@ -42,6 +42,9 @@ class Edrone():
         #To store the final setpoint. [latitude , longitude, altitude ]
         self.setpoint_final = [19.0, 72.0, 3.0]  
 
+        #To store the initial position. [latitude , longitude, altitude ]
+        self.setpoint_initial = [19.0, 72.0, 3.0]  
+
         # This is the location of destination of box retrive from qr code. [latitude , longitude, altitude ]
         self.box_position = [0.0, 0.0, 0.0]  
 
@@ -273,10 +276,15 @@ def gripper_active(state):
         print("Service call failed: %s"%e)
 
 
-def is_at_setpoint(setpoint):
+def is_at_setpoint3D(setpoint):
         return ((e_drone.drone_location[0] > setpoint[0]+0.000004517 or e_drone.drone_location[0] < setpoint[0]-0.000004517) or 
-            (e_drone.drone_location[1] >  setpoint[1]+0.0000047487 or e_drone.drone_location[1] < setpoint[1]-0.0000047487) or 
+                (e_drone.drone_location[1] >  setpoint[1]+0.0000047487 or e_drone.drone_location[1] < setpoint[1]-0.0000047487) or 
                 (e_drone.drone_location[2] > setpoint[2]+0.2 or e_drone.drone_location[2] < setpoint[2]-0.2))
+
+
+def is_at_setpoint2D(setpoint):
+        return ((e_drone.drone_location[0] > setpoint[0]+0.000004517 or e_drone.drone_location[0] < setpoint[0]-0.000004517) or 
+                (e_drone.drone_location[1] >  setpoint[1]+0.0000047487 or e_drone.drone_location[1] < setpoint[1]-0.0000047487))
 
 
 def avoid_obstacle(prev_ranges):
@@ -305,50 +313,73 @@ def reach_destination():
     #rospy.loginfo(e_drone.setpoint_final)
     if(e_drone.setpoint_final[2] > e_drone.drone_location[2] or e_drone.drone_location[2] < 24):
         e_drone.setpoint_location = e_drone.drone_location[:-1] + [26]
-        while(is_at_setpoint(e_drone.setpoint_location)):
+        while(is_at_setpoint3D(e_drone.setpoint_location)):
             e_drone.pid()
             time.sleep(0.05)
 
-    #Applying parametric form of line
-    e_drone.setpoint_location[2] = e_drone.drone_location[2]
-    slope = Float32()
-    cos = Float32()
-    sin = Float32()
-    slope = ((e_drone.setpoint_final[1]-e_drone.drone_location[1])/(e_drone.setpoint_final[0]-e_drone.drone_location[0]))
-    cos = np.sqrt(1 + slope**2)
-    cos = 1/cos
-    sin = np.sqrt(1-cos**2)
-    f1 = 0.00005
-    f2 = 0.00005
+    e_drone.setpoint_initial[0] = e_drone.drone_location[0]
+    e_drone.setpoint_initial[1] = e_drone.drone_location[1]
+    e_drone.setpoint_initial[2] = e_drone.drone_location[2]
+    e_drone.setpoint_location[0] = e_drone.setpoint_initial[0]
+    e_drone.setpoint_location[1] = e_drone.setpoint_initial[1]
+    e_drone.setpoint_location[2] = e_drone.setpoint_initial[2]
+    t = 0.000007
+    divider = np.sqrt((e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])**2 + (e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])**2)
+    
+    while(is_at_setpoint2D(e_drone.setpoint_final)):
+        e_drone.pid()
+        time.sleep(0.05) 
 
-    if e_drone.setpoint_final[0] < e_drone.drone_location[0] and cos > 0:
-        cos *= -1
-    if e_drone.setpoint_final[1] < e_drone.drone_location[1] and sin > 0:
-        sin *= -1
+        if((e_drone.setpoint_location[0] > e_drone.setpoint_final[0]+0.000020517 or e_drone.setpoint_location[0] < e_drone.setpoint_final[0]-0.000020517) or 
+           (e_drone.setpoint_location[1] >  e_drone.setpoint_final[1]+0.0000207487 or e_drone.setpoint_location[1] < e_drone.setpoint_final[1]-0.0000207487) ):
+            e_drone.setpoint_location[0] = e_drone.drone_location[0] + t*(e_drone.setpoint_final[0] - e_drone.drone_location[0]) /divider
+            e_drone.setpoint_location[1] = e_drone.drone_location[1] + t*(e_drone.setpoint_final[1] - e_drone.drone_location[1]) /divider
+        
+        else:
+            e_drone.setpoint_location[0] = e_drone.setpoint_final[0]
+            e_drone.setpoint_location[1] = e_drone.setpoint_final[1]
 
-    prev_ranges = [e_drone.laser_negative_latitude, e_drone.laser_positive_longitude, e_drone.laser_negative_longitude]
-    while(is_at_setpoint(e_drone.setpoint_final)):
-        e_drone.setpoint_location = [e_drone.drone_location[0] + f1*cos, e_drone.drone_location[1]+ f2*sin, e_drone.setpoint_location[2]]
 
-        #If setpoint_location become less or more than setpoint_final
-        if ((cos > 0 and e_drone.setpoint_location[0] > e_drone.setpoint_final[0]) or (cos < 0 and e_drone.setpoint_location[0] < e_drone.setpoint_final[0])):
-            e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_location[2]]
+    # #Applying parametric form of line
+    # e_drone.setpoint_location[2] = e_drone.drone_location[2]
+    # slope = Float32()
+    # cos = Float32()
+    # sin = Float32()
+    # slope = ((e_drone.setpoint_final[1]-e_drone.drone_location[1])/(e_drone.setpoint_final[0]-e_drone.drone_location[0]))
+    # cos = np.sqrt(1 + slope**2)
+    # cos = 1/cos
+    # sin = np.sqrt(1-cos**2)
+    # f1 = 0.00005
+    # f2 = 0.00005
+
+    # if e_drone.setpoint_final[0] < e_drone.drone_location[0] and cos > 0:
+    #     cos *= -1
+    # if e_drone.setpoint_final[1] < e_drone.drone_location[1] and sin > 0:
+    #     sin *= -1
+
+    # prev_ranges = [e_drone.laser_negative_latitude, e_drone.laser_positive_longitude, e_drone.laser_negative_longitude]
+    # while(is_at_setpoint3D(e_drone.setpoint_final)):
+    #     e_drone.setpoint_location = [e_drone.drone_location[0] + f1*cos, e_drone.drone_location[1]+ f2*sin, e_drone.setpoint_location[2]]
+
+    #     #If setpoint_location become less or more than setpoint_final
+    #     if ((cos > 0 and e_drone.setpoint_location[0] > e_drone.setpoint_final[0]) or (cos < 0 and e_drone.setpoint_location[0] < e_drone.setpoint_final[0])):
+    #         e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_location[2]]
             
-        if ((sin > 0 and e_drone.setpoint_location[1] > e_drone.setpoint_final[1]) or (sin < 0 and e_drone.setpoint_location[1] < e_drone.setpoint_final[1])):
-            e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_location[2]]
+    #     if ((sin > 0 and e_drone.setpoint_location[1] > e_drone.setpoint_final[1]) or (sin < 0 and e_drone.setpoint_location[1] < e_drone.setpoint_final[1])):
+    #         e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_location[2]]
             
-        #rospy.loginfo(e_drone.setpoint_location)
-        while (is_at_setpoint(e_drone.setpoint_location)):
-            if e_drone.laser_negative_latitude <= 10:
-                avoid_obstacle(prev_ranges)
-            e_drone.pid()
-            time.sleep(0.05)
-        if e_drone.setpoint_location[:-1] == e_drone.setpoint_final[:-1]:
-            break
+    #     #rospy.loginfo(e_drone.setpoint_location)
+    #     while (is_at_setpoint3D(e_drone.setpoint_location)):
+    #         if e_drone.laser_negative_latitude <= 10:
+    #             avoid_obstacle(prev_ranges)
+    #         e_drone.pid()
+    #         time.sleep(0.05)
+    #     if e_drone.setpoint_location[:-1] == e_drone.setpoint_final[:-1]:
+    #         break
 
     #Descending the drone on the setpoint
     e_drone.setpoint_location = e_drone.setpoint_final
-    while (is_at_setpoint(e_drone.setpoint_location)):
+    while (is_at_setpoint3D(e_drone.setpoint_location)):
         e_drone.pid() 
         time.sleep(0.05)
 
