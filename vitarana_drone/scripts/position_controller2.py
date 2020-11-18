@@ -292,9 +292,21 @@ def avoid_obstacle():
     # delta_altitude = 0
     # print("Avoiding Obstacles")
     flag =0
+    direction=0
     while((e_drone.laser_negative_latitude <= 6 and e_drone.laser_negative_latitude >= 0.5) or (e_drone.laser_positive_latitude <= 6 and e_drone.laser_positive_latitude >= 0.5) or 
-            (e_drone.laser_negative_longitude <= 6 and e_drone.laser_negative_longitude >= 0.5) or (e_drone.laser_negative_longitude <= 6 and e_drone.laser_negative_longitude >= 0.5)):
-        e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5] 
+            (e_drone.laser_negative_longitude <= 4 and e_drone.laser_negative_longitude >= 0.5) or (e_drone.laser_negative_longitude <= 4 and e_drone.laser_negative_longitude >= 0.5)):
+        #e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5]
+        slope = Float32()
+        slope = ((e_drone.setpoint_final[1]-e_drone.drone_location[1])/(e_drone.setpoint_final[0]-e_drone.drone_location[0]))
+        print(slope)
+        if(slope <= 0 and (direction==0 or direction == 1)):
+            print("here1")
+            direction=1
+            e_drone.setpoint_location = [e_drone.drone_location[0] + 0.00005]+ [e_drone.drone_location[1] + 0.00005]+ [e_drone.drone_location[2]]
+        elif(direction==0 or direction == 2):
+            print("here2")
+            direction=2
+            e_drone.setpoint_location = [e_drone.drone_location[0] + 0.00005]+ [e_drone.drone_location[1] - 0.00005]+ [e_drone.drone_location[2]]
         e_drone.pid()
         time.sleep(0.05)
         print(e_drone.laser_negative_latitude, e_drone.laser_positive_latitude, e_drone.laser_negative_longitude, e_drone.laser_positive_longitude)
@@ -302,6 +314,7 @@ def avoid_obstacle():
 
     if(flag):
         e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 3]
+        #e_drone.setpoint_location = [e_drone.drone_location[0] + 3] + e_drone.setpoint_location[0:]
         while (is_at_setpoint3D(e_drone.setpoint_location)):
             e_drone.pid()
             time.sleep(0.05)
@@ -470,3 +483,4 @@ if __name__ == '__main__':
     while not rospy.is_shutdown():
         main()
         break
+
