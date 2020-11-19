@@ -292,46 +292,124 @@ def avoid_obstacle():
     # delta_altitude = 0
     # print("Avoiding Obstacles")
     flag =0
-    direction=0
-    while((e_drone.laser_negative_latitude <= 6 and e_drone.laser_negative_latitude >= 0.5) or (e_drone.laser_positive_latitude <= 6 and e_drone.laser_positive_latitude >= 0.5) or 
-            (e_drone.laser_negative_longitude <= 4 and e_drone.laser_negative_longitude >= 0.5) or (e_drone.laser_negative_longitude <= 4 and e_drone.laser_negative_longitude >= 0.5)):
-        #e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5]
-        slope = Float32()
-        slope = ((e_drone.setpoint_final[1]-e_drone.drone_location[1])/(e_drone.setpoint_final[0]-e_drone.drone_location[0]))
-        print(slope)
-        if(slope <= 0 and (direction==0 or direction == 1)):
-            print("here1")
-            direction=1
-            e_drone.setpoint_location = [e_drone.drone_location[0] + 0.00005]+ [e_drone.drone_location[1] + 0.00005]+ [e_drone.drone_location[2]]
-        elif(direction==0 or direction == 2):
-            print("here2")
-            direction=2
-            e_drone.setpoint_location = [e_drone.drone_location[0] + 0.00005]+ [e_drone.drone_location[1] - 0.00005]+ [e_drone.drone_location[2]]
-        e_drone.pid()
-        time.sleep(0.05)
-        print(e_drone.laser_negative_latitude, e_drone.laser_positive_latitude, e_drone.laser_negative_longitude, e_drone.laser_positive_longitude)
-        flag =1
+    # direction=0
+    # while((e_drone.laser_negative_latitude <= 6 and e_drone.laser_negative_latitude >= 0.5) or (e_drone.laser_positive_latitude <= 6 and e_drone.laser_positive_latitude >= 0.5) or 
+    #         (e_drone.laser_negative_longitude <= 4 and e_drone.laser_negative_longitude >= 0.5) or (e_drone.laser_negative_longitude <= 4 and e_drone.laser_negative_longitude >= 0.5)):
+    #     #e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5]
+    #     slope = Float32()
+    #     slope = ((e_drone.setpoint_final[1]-e_drone.drone_location[1])/(e_drone.setpoint_final[0]-e_drone.drone_location[0]))
+    #     print(slope)
+    #     if(slope <= 0 and (direction==0 or direction == 1)):
+    #         print("here1")
+    #         direction=1
+    #         e_drone.setpoint_location = [e_drone.drone_location[0] + 0.00005]+ [e_drone.drone_location[1] + 0.00005]+ [e_drone.drone_location[2]]
+    #     elif(direction==0 or direction == 2):
+    #         print("here2")
+    #         direction=2
+    #         e_drone.setpoint_location = [e_drone.drone_location[0] + 0.00005]+ [e_drone.drone_location[1] - 0.00005]+ [e_drone.drone_location[2]]
+    #     e_drone.pid()
+    #     time.sleep(0.05)
+    #     print(e_drone.laser_negative_latitude, e_drone.laser_positive_latitude, e_drone.laser_negative_longitude, e_drone.laser_positive_longitude)
+    #     flag =1
 
-    if(flag):
-        e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 3]
-        #e_drone.setpoint_location = [e_drone.drone_location[0] + 3] + e_drone.setpoint_location[0:]
+
+
+    while(e_drone.laser_negative_latitude <= 6 and e_drone.laser_negative_latitude >= 0.5 and e_drone.setpoint_final[0] - e_drone.setpoint_initial[0] <=0):
+        e_drone.pid()
+        time.sleep(0.05) 
+        
+        e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000015*(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])/abs(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])
+        flag = 1
+
+
+    if(flag == 1):
+        e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000200*(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])/abs(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])
         while (is_at_setpoint3D(e_drone.setpoint_location)):
             e_drone.pid()
             time.sleep(0.05)
 
-        # if delta_altitude <= 6:
-        #     while(not e_drone.laser_negative_latitude >= 20):
-        #         e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 0.5] 
-        #         delta_altitude = e_drone.drone_location[2] - altitude
-        #         e_drone.pid()
-        #         time.sleep(0.05)
+
+    while(e_drone.laser_positive_latitude <= 6 and e_drone.laser_positive_latitude >= 0.5 and e_drone.setpoint_final[0] - e_drone.setpoint_initial[0] >=0):
+        e_drone.pid()
+        time.sleep(0.05) 
         
-        '''if(e_drone.laser_positive_longitude >= 4):
-            while (e_drone.laser_negative_latitude <= 10):
-                e_drone.setpoint_location = [e_drone.drone_location[0], e_drone.drone_location[1]- 0.00005, e_drone.drone_location[2]]
-                e_drone.pid()
-                time.sleep(0.05)'''
-            
+        e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000015*(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])/abs(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])
+        flag = 2
+
+
+    if(flag == 2):
+        e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000200*(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])/abs(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])
+        while (is_at_setpoint3D(e_drone.setpoint_location)):
+            e_drone.pid()
+            time.sleep(0.05)
+
+
+    while(e_drone.laser_negative_longitude <= 6 and e_drone.laser_negative_longitude >= 0.5 and e_drone.setpoint_final[1] - e_drone.setpoint_initial[1] <=0):
+        e_drone.pid()
+        time.sleep(0.05) 
+        
+        e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000015*(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])/abs(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])
+        flag = 3
+
+
+    if(flag == 3):
+        e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000200*(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])/abs(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])
+        while (is_at_setpoint3D(e_drone.setpoint_location)):
+            e_drone.pid()
+            time.sleep(0.05)
+
+        
+    while(e_drone.laser_negative_latitude <= 6 and e_drone.laser_negative_latitude >= 0.5):
+        e_drone.pid()
+        time.sleep(0.05) 
+        
+        e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000015*(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])/abs(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])
+        flag = 4
+
+
+    if(flag == 4):
+        e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000200*(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])/abs(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])
+        while (is_at_setpoint3D(e_drone.setpoint_location)):
+            e_drone.pid()
+            time.sleep(0.05)
+
+
+
+    if(flag !=0 ):
+        t = time.time()
+        while time.time() -t < 10:
+            e_drone.pid()
+            time.sleep(0.05)
+
+        e_drone.setpoint_initial[0] = e_drone.drone_location[0]
+        e_drone.setpoint_initial[1] = e_drone.drone_location[1]
+        e_drone.setpoint_initial[2] = e_drone.drone_location[2]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # if(flag):
+    #     e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 3]
+    #     #e_drone.setpoint_location = [e_drone.drone_location[0] + 3] + e_drone.setpoint_location[0:]
+    #     while (is_at_setpoint3D(e_drone.setpoint_location)):
+    #         e_drone.pid()
+    #         time.sleep(0.05)
+
+    #     e_drone.setpoint_initial[0] = e_drone.drone_location[0]
+    #     e_drone.setpoint_initial[1] = e_drone.drone_location[1]
+    #     e_drone.setpoint_initial[2] = e_drone.drone_location[2]
+
+
 def reach_destination():
     
     #if drone is at lower altitude first raise its altitude
@@ -349,13 +427,14 @@ def reach_destination():
     e_drone.setpoint_location[0] = e_drone.setpoint_initial[0]
     e_drone.setpoint_location[1] = e_drone.setpoint_initial[1]
     e_drone.setpoint_location[2] = e_drone.setpoint_initial[2]
-    multiplier = 0.000007
-    divider = np.sqrt((e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])**2 + (e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])**2)
+    multiplier = 0.000010
     
     while(is_at_setpoint2D(e_drone.setpoint_final)):
         e_drone.pid()
         time.sleep(0.05) 
 
+        divider = np.sqrt((e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])**2 + (e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])**2)
+        
         if((e_drone.setpoint_location[0] > e_drone.setpoint_final[0]+0.000020517 or e_drone.setpoint_location[0] < e_drone.setpoint_final[0]-0.000020517) or 
            (e_drone.setpoint_location[1] >  e_drone.setpoint_final[1]+0.0000207487 or e_drone.setpoint_location[1] < e_drone.setpoint_final[1]-0.0000207487) ):
             e_drone.setpoint_location[0] = e_drone.drone_location[0] + multiplier*(e_drone.setpoint_final[0] - e_drone.drone_location[0]) /divider
