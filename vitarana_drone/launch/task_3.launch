@@ -13,7 +13,9 @@
 
        	<node pkg="vitarana_drone" type="attitude_controller.py" name="attitude_controller" output="screen"/>
 
-       	<node pkg="vitarana_drone" type="qr_detect.py" name="qr_scanner" output="screen"/>
+       	<node pkg="vitarana_drone" type="qr_detect.py" name="barcode_test" output="screen"/>
+
+       	<node pkg="vitarana_drone" type="detect_marker_cascade.py" name="marker_detect" output="screen"/>
 
 		<node pkg="vitarana_drone" type="position_controller3.py" name="position_controller3" output="screen"/>
 
