@@ -14,7 +14,7 @@ from vitarana_drone.msg import *
 from pid_tune.msg import PidTune
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import Imu
-from std_msgs.msg import Float32, String
+from std_msgs.msg import Float32, String, Int16, Int32MultiArray
 import rospy
 import numpy as np
 import time
@@ -118,6 +118,13 @@ class Edrone():
         img_width = 400
         hfov_rad = 1.3962634 
         self.focal_length = (img_width/2)/math.tan(hfov_rad/2)
+
+        self.buildings = [
+        					[18.9990965928, 72.0000664814, 10.75],
+        					[18.9990965925, 71.9999050292, 22.2],
+        					[18.9993675932,72.0000569892,10.7]
+        				 ]
+        self.current_marker_id = 0
         
         # initializing Publisher for /drone_command, /latitude_error, /longitude_error, /altitude_error and tolerences
         self.rpyt_pub = rospy.Publisher(
@@ -142,6 +149,7 @@ class Edrone():
         self.altitude_low = rospy.Publisher(
             '/altitude_low', Float32, queue_size=1)
 
+        self.curr_marker_id = rospy.Publisher('curr_marker_id', Int16, queue_size = 1)
         # Subscribing to /edrone/gps, /pid_tuning_roll, /pid_tuning_pitch, /pid_tuning_yaw {used these GUIs only to tune ;-) }
         rospy.Subscriber('/edrone/gps', NavSatFix, self.gps_callback)
         rospy.Subscriber('/edrone/imu/data', Imu, self.imu_callback)
@@ -149,7 +157,7 @@ class Edrone():
         # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)      # for longitude
         # rospy.Subscriber('/pid_tuning_yaw', PidTune, self.yaw_set_pid)          # for altitude
         rospy.Subscriber('/qrValue', String, self.qr_callback)
-        rospy.Subscriber('/pixValue', String, self.marker_callback)
+        rospy.Subscriber('/pixValue', Int32MultiArray, self.marker_callback)
         rospy.Subscriber('/edrone/range_finder_top',
                          LaserScan, self.range_finder_callback)
 
@@ -178,12 +186,35 @@ class Edrone():
         self.box_position[2] = float(final_data[2])
 
 
-    def marker_callback(self, data):
-        marker_mid = data.data
-        marker_mid = marker_mid.split(",")
-        self.centre_x = marker_mid[0]
-        self.centre_y = marker_mid[1]
+    def marker_callback(self, msg):
+        self.centre_x, self.centre_y = msg.data
+        self.centre_y *= -1
+        self.centre_x, self.centre_y = self.convert_to_global()
+        #print(self.centre_x, self. centre_y)
 
+    def marker_detection(self):
+    	vertical_distance = self.drone_location[2] - self.buildings[self.current_marker_id-1][2]
+    	err_x = (self.centre_x*vertical_distance)/self.focal_length
+    	err_y = (self.centre_y*vertical_distance)/self.focal_length
+    	data = [err_x*0.000004517*5,err_y*0.0000047487*5]
+    	return data
+
+    def convert_to_global(self):
+    	theta = self.drone_orientation_euler[2]
+    	rot_matrix = np.array([
+    					[np.cos(theta), -np.sin(theta), self.drone_location[0]],
+    					[np.sin(theta), np.cos(theta), -self.drone_location[1]],
+    					[0,0,1]
+    				 ])
+    	np.reshape(rot_matrix, (3,3))
+    	local_coordinates = self.marker_detection()
+    	local_coordinates += [1]
+    	local_coordinates = np.array(local_coordinates)
+    	np.reshape(local_coordinates,(3,1))
+    	global_coordinates = np.dot(rot_matrix, local_coordinates)
+    	global_coordinates = global_coordinates.transpose()
+    	global_coordinates[1] *= -1
+    	return global_coordinates[:-1]
     # Imu callback function. The function gets executed each time when imu publishes /edrone/imu/data
 
     def imu_callback(self, msg):
@@ -192,6 +223,7 @@ class Edrone():
         self.drone_orientation_quaternion[2] = msg.orientation.z
         self.drone_orientation_quaternion[3] = msg.orientation.w
         # converting the current orientations from quaternion to euler angles
+        #2 is yaw
         (self.drone_orientation_euler[1], self.drone_orientation_euler[0], self.drone_orientation_euler[2]) = tf.transformations.euler_from_quaternion(
             [self.drone_orientation_quaternion[0], self.drone_orientation_quaternion[1], self.drone_orientation_quaternion[2], self.drone_orientation_quaternion[3]])
 
@@ -515,21 +547,14 @@ def reach_destination():
         e_drone.pid()
         time.sleep(0.05)
 
-
-def marker_detection(dest_altitude):
-    vertical_distance = e_drone.drone_location[2] - dest_altitude
-    err_x = (e_drone.centre_x*vertical_distance)/e_drone.focal_length
-    err_y = (e_drone.centre_y*vertical_distance)/e_drone.focal_length
-
-    data = [err_x,err_y]
-
-    return data
 # main function, it will move the drone at all three points to reach the destination.
 
 
 def main():
     # going to pick the box
     # 1st patch
+
+    e_drone.current_marker_id = 1
     e_drone.setpoint_final = [18.9990965928, 72.0000664814, 11.75]
     reach_destination()
     # To settle on the destination
@@ -537,8 +562,38 @@ def main():
     while time.time() - t < 5:
         e_drone.pid()
         time.sleep(0.05)
+    print("Reached Building 1")
+    count = 0
+    x, y , prev_x, prev_y = 0, 0 ,0 ,0
+    e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 15]
+    reach_destination()
     
-    
+    t = time.time()
+    while  time.time() - t < 5:
+    	e_drone.pid()
+    	time.sleep(0.05)
+    print("Reached Height")
+
+    while(count < 5):
+
+  		if(prev_x != e_drone.centre_x or prev_y != e_drone.centre_y):
+  			x += e_drone.centre_x
+  			y += e_drone.centre_y
+  			count += 1
+  			prev_x, prev_y = x, y
+    x /= count
+    y /= count
+    e_drone.setpoint_final = [x,y,10.75]
+    print(e_drone.setpoint_final)
+    reach_destination()
+
+    t = time.time()
+    while  time.time() - t < 5:
+    	e_drone.pid()
+    	time.sleep(0.05)
+   
+    print("Reached marker 1")
+
     e_drone.setpoint_final = [18.9990965928, 72.0000664814, 35.75]
     reach_destination()
     # To settle on the destination
@@ -548,6 +603,7 @@ def main():
         time.sleep(0.05)
 
     # 4th patch
+    e_drone.current_marker_id = 2
     e_drone.setpoint_final = [18.9990965925, 71.9999050292, 23.2]
     reach_destination()
     # To settle on the destination
@@ -557,6 +613,7 @@ def main():
         time.sleep(0.05)
 
     # 3rd patch
+    e_drone.current_marker_id = 3
     e_drone.setpoint_final = [18.9993675932, 72.0000569892, 11.7]
     reach_destination()
     # To settle on the destination
@@ -570,7 +627,7 @@ if __name__ == '__main__':
 
     # pause of 4 sec to open and load the gazibo
     t = time.time()
-    while time.time() - t < 4:
+    while time.time() - t < 10:
         pass
 
     # making e_drone object of Edrone class
