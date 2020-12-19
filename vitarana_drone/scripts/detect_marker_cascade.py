@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 import rospy
 from pyzbar.pyzbar import decode
-from std_msgs.msg import String,Float64
+from std_msgs.msg import String,Float64, Int32MultiArray
 import matplotlib.pyplot as plt
 import rospkg
 
@@ -26,7 +26,7 @@ class image_detection():
         self.bridge = CvBridge()
         # self.pub = rospy.Publisher('qrValue',String,queue_size=1)
         # self.pub = rospy.Publisher('/edrone/marker_data',Float64,queue_size=1)
-        self.pub = rospy.Publisher('pixValue',String,queue_size=1)
+        self.pub = rospy.Publisher('pixValue',Int32MultiArray,queue_size=1)
         self.rate = rospy.Rate(1)
         # Subscribing to the camera topic
         self.image_sub = rospy.Subscriber(
@@ -50,12 +50,12 @@ class image_detection():
 
             for (x, y, w, h) in logo:
                 cv2.rectangle(self.img, (x, y), (x + w, y + h), (255, 255, 0), 2)
-                print(x + w/2)
-                print(y + h/2)
+                #print(x + w/2)
+                #print(y + h/2)
                 centre_x = x + w/2
                 centre_y = y + h/2
-                data = str(centre_x) + "," + str(centre_y)
-                self.pub.publish(data)
+                data_for_publishing = Int32MultiArray(data = [centre_x, centre_y])
+                self.pub.publish(data_for_publishing)
 
 
             # plt.imshow(cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB))
