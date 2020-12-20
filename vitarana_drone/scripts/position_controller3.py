@@ -157,7 +157,7 @@ class Edrone():
         # rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)        # for latitude
         # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)      # for longitude
         # rospy.Subscriber('/pid_tuning_yaw', PidTune, self.yaw_set_pid)          # for altitude
-        rospy.Subscriber('/qrValue', String, self.qr_callback)
+        #rospy.Subscriber('/qrValue', String, self.qr_callback)
         rospy.Subscriber('/pixValue', Int32MultiArray, self.marker_callback)
         rospy.Subscriber('/edrone/range_finder_top',
                          LaserScan, self.range_finder_callback)
@@ -189,6 +189,8 @@ class Edrone():
 
     def marker_callback(self, msg):
         self.centre_x, self.centre_y = msg.data
+        self.centre_x -= 200
+        self.centre_y -= 200
         self.centre_y *= -1
         self.centre_x, self.centre_y = self.convert_to_global()
         #print(self.centre_x, self. centre_y)
@@ -197,13 +199,12 @@ class Edrone():
     	vertical_distance = self.drone_location[2] - self.buildings[self.current_marker_id][2]
     	err_x = (self.centre_x*vertical_distance)/self.focal_length
     	err_y = (self.centre_y*vertical_distance)/self.focal_length
-	print(err_x, err_y)
     	data = [err_x*0.000004517*5,err_y*0.0000047487*5]
     	return data
 
     def convert_to_global(self):
     	theta = self.drone_orientation_euler[2]
-    	rot_matrix = np.array([
+    	rot_matrix = np.mat([
     					[np.cos(theta), -np.sin(theta), self.drone_location[0]],
     					[np.sin(theta), np.cos(theta), -self.drone_location[1]],
     					[0,0,1]
@@ -211,11 +212,13 @@ class Edrone():
     	np.reshape(rot_matrix, (3,3))
     	local_coordinates = self.marker_detection()
     	local_coordinates += [1]
-    	local_coordinates = np.array(local_coordinates)
-    	np.reshape(local_coordinates,(3,1))
+    	local_coordinates = np.mat(local_coordinates)
+    	local_coordinates = local_coordinates.transpose()
     	global_coordinates = np.dot(rot_matrix, local_coordinates)
-    	global_coordinates = global_coordinates.transpose()
+    	global_coordinates = global_coordinates.flatten()
+    	global_coordinates = np.array(global_coordinates)[0]
     	global_coordinates[1] *= -1
+    	#print(global_coordinates)
     	return global_coordinates[:-1]
     # Imu callback function. The function gets executed each time when imu publishes /edrone/imu/data
 
@@ -576,13 +579,18 @@ def main():
     	
     	e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 15]
     	reach_destination()
-    	stablize_drone(time_limit = 5)
+    	stablize_drone(time_limit = 10)
     	print("Reached Height")
 
     	count = 0
     	x, y , prev_x, prev_y = 0, 0 ,0 ,0
-    	while(count < 5):
-  			if(prev_x != e_drone.centre_x or prev_y != e_drone.centre_y):
+    	while(count < 10):
+    		print(e_drone.centre_x, e_drone.centre_y)
+    		if(abs(e_drone.centre_x - e_drone.drone_location[0]) > 5 
+    			or abs(e_drone.centre_y - e_drone.drone_location[1]) > 5):
+    			continue
+
+    		else:  			
   				x += e_drone.centre_x
   				y += e_drone.centre_y
   				count += 1
