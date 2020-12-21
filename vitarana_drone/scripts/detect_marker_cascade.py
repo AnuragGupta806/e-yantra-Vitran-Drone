@@ -11,10 +11,11 @@ from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
 import rospy
-from pyzbar.pyzbar import decode
-from std_msgs.msg import String,Float64, Int32MultiArray
+from sensor_msgs.msg import NavSatFix, Imu
+from std_msgs.msg import String,Float64,Float32
 import matplotlib.pyplot as plt
 import rospkg
+import math
 
 class image_detection():
 
@@ -22,11 +23,18 @@ class image_detection():
     def __init__(self):
         rospy.init_node('marker_detect')  # Initialise rosnode
         self.img = np.empty([])
+
+        self.theta = 0
+        self.vertical_distance = 0
+
+        img_width = 400
+        hfov_rad = 1.3962634 
+        self.focal_length = (img_width/2)/math.tan(hfov_rad/2)
         # This will contain your image frame from camera
         self.bridge = CvBridge()
         # self.pub = rospy.Publisher('qrValue',String,queue_size=1)
         # self.pub = rospy.Publisher('/edrone/marker_data',Float64,queue_size=1)
-        self.pub = rospy.Publisher('pixValue',Int32MultiArray,queue_size=1)
+        #self.pub = rospy.Publisher('pixValue',Int32MultiArray,queue_size=1)
         self.rate = rospy.Rate(1)
         # Subscribing to the camera topic
         self.image_sub = rospy.Subscriber(
@@ -35,10 +43,28 @@ class image_detection():
         rospack = rospkg.RosPack()
         filepath = rospack.get_path('vitarana_drone')+'/data/cascade.xml'
         self.logo_cascade = cv2.CascadeClassifier(filepath)
-
+        self.err_x_m = rospy.Publisher('/edrone/err_x_m', Float64, queue_size = 1)
+        self.err_y_m = rospy.Publisher('/edrone/err_y_m', Float64, queue_size = 1)
+        rospy.Subscriber("/edrone/vertical_distance", Float64, self.vertical_distance_callback)
+        rospy.Subscriber("/edrone/yaw", Float64, self.theta_callback)
         rospy.spin()
 
 
+    def vertical_distance_callback(self, data):
+        self.vertical_distance = data.data
+        
+
+    def theta_callback(self, msg):
+        self.theta = msg.data
+
+    def pixel_to_m(self,centre_x_pixel, centre_y_pixel):
+        err_x = (centre_x_pixel*self.vertical_distance)/self.focal_length
+        err_y = (centre_y_pixel*self.vertical_distance)/self.focal_length
+        err_x = err_x*np.cos(self.theta) - err_y*np.sin(self.theta)
+        err_y= err_x*np.sin(self.theta) + err_y*np.cos(self.theta)
+
+        self.err_x_m.publish(err_x)
+        self.err_y_m.publish(err_y)
 
     # Callback function of camera topic
     def image_callback(self, data):
@@ -52,12 +78,13 @@ class image_detection():
                 cv2.rectangle(self.img, (x, y), (x + w, y + h), (255, 255, 0), 2)
                 #print(x + w/2)
                 #print(y + h/2)
-                centre_x = x + w/2
-                centre_y = y + h/2
-                data_for_publishing = Int32MultiArray(data = [centre_x, centre_y])
-                self.pub.publish(data_for_publishing)
 
-
+                #Pixel coordinates wrt drone
+                centre_x = x + w/2 - 200
+                centre_y = 200 - (y + h/2)
+                self.pixel_to_m(centre_x, centre_y)
+                #data_for_publishing = Int32MultiArray(data = [centre_x, centre_y])
+            
             # plt.imshow(cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB))
             cv2.imshow('image',self.img)
             cv2.waitKey(1)
