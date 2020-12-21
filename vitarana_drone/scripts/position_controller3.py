@@ -12,9 +12,8 @@ Team name : !ABHIMANYU
 # Importing the required libraries
 from vitarana_drone.msg import *
 from pid_tune.msg import PidTune
-from sensor_msgs.msg import NavSatFix
-from sensor_msgs.msg import Imu
-from std_msgs.msg import Float32, String, Int16, Int32MultiArray
+from sensor_msgs.msg import NavSatFix, Imu
+from std_msgs.msg import Float32, String, Int16, Float64
 import rospy
 import numpy as np
 import time
@@ -115,9 +114,9 @@ class Edrone():
         self.centre_y = -1
 
         # evaluating focal length of drone camera
-        img_width = 400
-        hfov_rad = 1.3962634 
-        self.focal_length = (img_width/2)/math.tan(hfov_rad/2)
+        # img_width = 400
+        # hfov_rad = 1.3962634 
+        # self.focal_length = (img_width/2)/math.tan(hfov_rad/2)
 
         self.buildings = {
                             1: [18.9990965928, 72.0000664814, 10.75],
@@ -150,15 +149,22 @@ class Edrone():
         self.altitude_low = rospy.Publisher(
             '/altitude_low', Float32, queue_size=1)
 
-        self.curr_marker_id = rospy.Publisher('curr_marker_id', Int16, queue_size = 1)
-        # Subscribing to /edrone/gps, /pid_tuning_roll, /pid_tuning_pitch, /pid_tuning_yaw {used these GUIs only to tune ;-) }
+        self.vertical_distance_pub = rospy.Publisher('/edrone/vertical_distance', Float64, queue_size = 1)
+
+        self.curr_marker_id = rospy.Publisher('/edrone/curr_marker_id', Int16, queue_size = 1)
+        self.yaw_pub = rospy.Publisher('/edrone/yaw', Float64, queue_size = 1)
+        self.vertical_distance_pub = rospy.Publisher('/edrone/vertical_distance', Float64, queue_size = 1)
+        	
+        # Subscribing to /edrone/gps, /pid_tuning_yawyawroll, /pid_tuning_pitch, /pid_tuning_yaw {used these GUIs only to tune ;-) }
         rospy.Subscriber('/edrone/gps', NavSatFix, self.gps_callback)
         rospy.Subscriber('/edrone/imu/data', Imu, self.imu_callback)
-        # rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)        # for latitude
+        # rospy.Subscriber('/pid_tuning_yawyawroll', PidTune, self.roll_set_pid)        # for latitude
         # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)      # for longitude
-        # rospy.Subscriber('/pid_tuning_yaw', PidTune, self.yaw_set_pid)          # for altitude
+        # rospy.Subscriber('/pid_tuning_yaw', PidTune, stablize_dronelf.yaw_set_pid)          # for altitude
         #rospy.Subscriber('/qrValue', String, self.qr_callback)
-        rospy.Subscriber('/pixValue', Int32MultiArray, self.marker_callback)
+        #rospy.Subscriber('/pixValue', Int32MultiArray, self.marker_callback)
+        rospy.Subscriber('/edrone/err_x_m', Float64, self.centre_x_callback)
+        rospy.Subscriber('/edrone/err_y_m', Float64, self.centre_y_callback)
         rospy.Subscriber('/edrone/range_finder_top',
                          LaserScan, self.range_finder_callback)
 
@@ -178,56 +184,14 @@ class Edrone():
             self.laser_positive_latitude, self.laser_positive_longitude, self.laser_negative_latitude, self.laser_negative_longitude, _ = msg.ranges
         # print(self.laser_negative_latitude)
 
-    # qr callback function. The function gets executed each time when qr_code publishes /qrValue
-    def qr_callback(self, data):
-        final_data = data.data
-        final_data = final_data.split(",")
-        self.box_position[0] = float(final_data[0])
-        self.box_position[1] = float(final_data[1])
-        self.box_position[2] = float(final_data[2])
-
-
-    def marker_callback(self, msg):
-        x, y = msg.data
-        x -= 200
-        y -= 200
-        y *= -1
-        x, y = self.convert_pixal_to_coordinate(x, y)
-
-        self.centre_x = self.drone_location[0] + x
-        self.centre_y = self.drone_location[1] - y
-
-
-    def convert_pixal_to_coordinate(self, x, y):
-        vertical_distance = self.drone_location[2] - self.buildings[self.current_marker_id][2]
-        err_x = (x*vertical_distance)/self.focal_length
-        err_y = (y*vertical_distance)/self.focal_length
+    def centre_x_callback(self, marker_centre_x_m):
+        self.centre_x = marker_centre_x_m.data*0.000004517*2
+        self.centre_x = self.drone_location[0] + self.centre_x
         
-        theta = self.drone_orientation_euler[2]
-        # rot_matrix = np.mat([
-        #                 [np.cos(theta), -np.sin(theta), self.drone_location[0]],
-        #                 [np.sin(theta), np.cos(theta), -self.drone_location[1]],
-        #                 [0,0,1]
-        #              ])
-        # np.reshape(rot_matrix, (3,3))
-        # local_coordinates = self.marker_detection()
-        # local_coordinates += [1]
-        # local_coordinates = np.mat(local_coordinates)
-        # local_coordinates = local_coordinates.transpose()
-        # global_coordinates = np.dot(rot_matrix, local_coordinates)
-        # global_coordinates = global_coordinates.flatten()
-        # global_coordinates = np.array(global_coordinates)[0]
-        # global_coordinates[1] *= -1
-        # #print(global_coordinates)
-        # return global_coordinates[:-1]
 
-        err_x = err_x*np.cos(theta) - err_y*np.sin(theta)
-        err_y = err_x*np.sin(theta) + err_y*np.cos(theta)
-
-        # print(err_x, err_y)
-
-        return [err_x*0.000004517*2, err_y*0.0000047487*2]
-
+    def centre_y_callback(self, marker_centre_y_m):
+    	self.centre_y = marker_centre_y_m.data*0.0000047487*2
+    	self.centre_y = self.drone_location[1] - self.centre_y
 
     # Imu callback function. The function gets executed each time when imu publishes /edrone/imu/data
     def imu_callback(self, msg):
@@ -272,6 +236,24 @@ class Edrone():
         self.Kd[2] = yaw.Kd * 30
 
     # this function is containing all the pid equation to control the position of the drone
+
+    def publish_data(self):
+    	# publishing rpyt_cmd to /drone_command
+        self.rpyt_pub.publish(self.rpyt_cmd)
+
+        # publishing different error values and tolerences
+        self.latitude_error.publish(self.latitude_Error)
+        self.longitude_error.publish(self.longitude_Error)
+        self.altitude_error.publish(self.altitude_Error)
+        self.latitude_up.publish(self.latitude_Up)
+        self.longitude_up.publish(self.longitude_Up)
+        self.altitude_up.publish(self.altitude_Up)
+        self.latitude_low.publish(self.latitude_Low)
+        self.longitude_low.publish(self.longitude_Low)
+        self.altitude_low.publish(self.altitude_Low)
+        self.curr_marker_id.publish(self.current_marker_id)
+        self.vertical_distance_pub.publish(self.drone_location[2] - self.buildings[self.current_marker_id][2])
+        self.yaw_pub.publish(self.drone_orientation_euler[2])
 
     def pid(self):
         # updating all the error values to be used in PID equation
@@ -335,20 +317,7 @@ class Edrone():
             self.rpyt_cmd.rcThrottle = 1000
 
         # self.rpyt_cmd.rcYaw = 2000.0
-
-        # publishing rpyt_cmd to /drone_command
-        self.rpyt_pub.publish(self.rpyt_cmd)
-
-        # publishing different error values and tolerences
-        self.latitude_error.publish(self.latitude_Error)
-        self.longitude_error.publish(self.longitude_Error)
-        self.altitude_error.publish(self.altitude_Error)
-        self.latitude_up.publish(self.latitude_Up)
-        self.longitude_up.publish(self.longitude_Up)
-        self.altitude_up.publish(self.altitude_Up)
-        self.latitude_low.publish(self.latitude_Low)
-        self.longitude_low.publish(self.longitude_Low)
-        self.altitude_low.publish(self.altitude_Low)
+        self.publish_data()
 
 
 # Function to call gripper service
@@ -579,16 +548,16 @@ def main():
         find_nearest_building()
         
         e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 1]
-        rospy.loginfo("going to Building "+ str(e_drone.current_marker_id)+ " at "+ str(e_drone.setpoint_final))
+        #rospy.loginfo("going to Building "+ str(e_drone.current_marker_id)+ " at "+ str(e_drone.setpoint_final))
         reach_destination(flag = 1, speed = 4)
         # To settle on the destination
         stablize_drone(time_limit = 5)
-        rospy.loginfo("Reached Building "+ str(e_drone.current_marker_id))
+        #rospy.loginfo("Reached Building "+ str(e_drone.current_marker_id))
         
-        e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 15]
+        e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 10]
         reach_destination(flag = 0, speed = 4)
         stablize_drone(time_limit = 5)
-        print("Reached Height")
+        #print("Reached Height")
 
         count = 0
         count2 =0 
@@ -597,9 +566,9 @@ def main():
         prev_x, prev_y = e_drone.centre_x, e_drone.centre_y
         
         while(count < 5):
-            print(e_drone.centre_x, e_drone.centre_y)
+            #print(e_drone.centre_x, e_drone.centre_y)
             if(e_drone.centre_x == prev_x or e_drone.centre_y == prev_y):
-                print("not detected")
+                #print("not detected")
                 count2+=1
 
                 if(count2%5 == 0):
@@ -629,12 +598,17 @@ def main():
         x /= count
         y /= count
 
-        e_drone.setpoint_final = [x,y,e_drone.buildings[e_drone.current_marker_id][2]+1]
-        print("marker found at ", e_drone.setpoint_final)
+        if(i == len(e_drone.buildings.keys()) - 1):
+        	e_drone.setpoint_final = [x,y,e_drone.buildings[e_drone.current_marker_id][2]+1]
+        else: 
+        	e_drone.setpoint_final = [x,y, e_drone.drone_location[2]]
+        #print("marker found at ", e_drone.setpoint_final)
         reach_destination(flag=0, speed=4)
         stablize_drone(time_limit = 5)
-        rospy.loginfo("Reached marker"+ str(e_drone.current_marker_id))
+        #rospy.loginfo("Reached marker"+ str(e_drone.current_marker_id))
 
+
+    #To hover the drone on last marker
     t = time.time()
     while time.time() -t < 2:
         e_drone.rpyt_cmd.rcRoll = 1500
@@ -646,7 +620,7 @@ if __name__ == '__main__':
 
     # pause of 4 sec to open and load the gazibo
     t = time.time()
-    while time.time() - t < 4:
+    while time.time() - t < 10:
         pass
 
     # making e_drone object of Edrone class
