@@ -554,13 +554,13 @@ def main():
         
         e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 1]
         rospy.loginfo("going to Building "+ str(e_drone.current_marker_id)+ " at "+ str(e_drone.setpoint_final))
-        reach_destination(flag = 1, speed = 4)
+        reach_destination(flag = 1, speed = 5)
         # To settle on the destination
         stablize_drone(time_limit = 5)
         rospy.loginfo("Reached Building "+ str(e_drone.current_marker_id))
         
         e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 15]
-        reach_destination(flag = 0, speed = 4)
+        reach_destination(flag = 0, speed = 5)
         stablize_drone(time_limit = 5)
         rospy.loginfo("marker detection started")
 
