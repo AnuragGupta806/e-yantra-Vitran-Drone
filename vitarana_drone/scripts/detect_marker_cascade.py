@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
-'''
-This is a boiler plate script that contains an example on how to subscribe a rostopic containing camera frames 
-and store it into an OpenCV image to use it further for image processing tasks.
-Use this code snippet in your code or you can also continue adding your code in the same file
-'''
+'''**********************************
+E-yantra
+Theme: Vitran Drone
+Task: task3
+Purpose: marker detection
+Team ID : 0583
+Team name : !ABHIMANYU 
+**********************************'''
 
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
@@ -45,8 +48,10 @@ class image_detection():
         self.logo_cascade = cv2.CascadeClassifier(filepath)
         self.err_x_m = rospy.Publisher('/edrone/err_x_m', Float64, queue_size = 1)
         self.err_y_m = rospy.Publisher('/edrone/err_y_m', Float64, queue_size = 1)
+        
         rospy.Subscriber("/edrone/vertical_distance", Float64, self.vertical_distance_callback)
         rospy.Subscriber("/edrone/yaw", Float64, self.theta_callback)
+        
         rospy.spin()
 
 
