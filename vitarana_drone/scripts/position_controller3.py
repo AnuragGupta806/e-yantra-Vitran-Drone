@@ -13,7 +13,7 @@ Team name : !ABHIMANYU
 from vitarana_drone.msg import *
 from pid_tune.msg import PidTune
 from sensor_msgs.msg import NavSatFix, Imu
-from std_msgs.msg import Float32, String, Int16, Float64
+from std_msgs.msg import Float32, String, Int8, Float64
 import rospy
 import numpy as np
 import time
@@ -151,7 +151,7 @@ class Edrone():
 
         self.vertical_distance_pub = rospy.Publisher('/edrone/vertical_distance', Float64, queue_size = 1)
 
-        self.curr_marker_id = rospy.Publisher('/edrone/curr_marker_id', Int16, queue_size = 1)
+        self.curr_marker_id = rospy.Publisher('/edrone/curr_marker_id', Int8, queue_size = 1)
         self.yaw_pub = rospy.Publisher('/edrone/yaw', Float64, queue_size = 1)
         self.vertical_distance_pub = rospy.Publisher('/edrone/vertical_distance', Float64, queue_size = 1)
             
@@ -163,8 +163,7 @@ class Edrone():
         # rospy.Subscriber('/pid_tuning_yaw', PidTune, stablize_dronelf.yaw_set_pid)          # for altitude
         #rospy.Subscriber('/qrValue', String, self.qr_callback)
         #rospy.Subscriber('/pixValue', Int32MultiArray, self.marker_callback)
-        rospy.Subscriber('/edrone/err_x_m', Float64, self.centre_x_callback)
-        rospy.Subscriber('/edrone/err_y_m', Float64, self.centre_y_callback)
+        rospy.Subscriber('/edrone/marker_data', MarkerData, self.marker_data_callback)
         rospy.Subscriber('/edrone/range_finder_top',
                          LaserScan, self.range_finder_callback)
 
@@ -184,13 +183,10 @@ class Edrone():
             self.laser_positive_latitude, self.laser_positive_longitude, self.laser_negative_latitude, self.laser_negative_longitude, _ = msg.ranges
         # print(self.laser_negative_latitude)
 
-    def centre_x_callback(self, marker_centre_x_m):
-        self.centre_x = marker_centre_x_m.data*0.000004517*2
+    def marker_data_callback(self, marker_data):
+        self.centre_x = marker_data.err_x_m*0.000004517*2
         self.centre_x = self.drone_location[0] + self.centre_x
-        
-
-    def centre_y_callback(self, marker_centre_y_m):
-        self.centre_y = marker_centre_y_m.data*0.0000047487*2
+        self.centre_y = marker_data.err_y_m*0.0000047487*2
         self.centre_y = self.drone_location[1] - self.centre_y
 
     # Imu callback function. The function gets executed each time when imu publishes /edrone/imu/data
@@ -562,7 +558,7 @@ def main():
         e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 15]
         reach_destination(flag = 0, speed = 5)
         stablize_drone(time_limit = 5)
-        rospy.loginfo("marker detection started")
+        rospy.loginfo("Initiating marker detection")
 
         count = 0
         count2 =0 
@@ -626,7 +622,7 @@ if __name__ == '__main__':
 
     # pause of 4 sec to open and load the gazibo
     t = time.time()
-    while time.time() - t < 4:
+    while time.time() - t < 10:
         pass
 
     # making e_drone object of Edrone class
