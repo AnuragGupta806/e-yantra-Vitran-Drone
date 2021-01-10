@@ -119,9 +119,9 @@ class Edrone():
         self.Kd_p = [57600000, 57900000, 3000]
 
         # initializing Kp, Kd and ki for velocity [latitude, longitude, altitude] after tunning
-        self.Kp_v = [2.15, 2.15, 650]
+        self.Kp_v = [2.15, 2.15, 900] #650]
         self.Ki_v = [0, 0, 0]
-        self.Kd_v = [130, 130, 25]
+        self.Kd_v = [130, 130, 500] #25]
 
         # Declaring variables for marker midpoint
         self.centre_x = -1
@@ -294,7 +294,10 @@ class Edrone():
                 self.setpoint_velocity[2] = self.setpoint_velocity[2]*speed/x
 
             for i in range(3):
-                self.error_value[i] = self.setpoint_velocity[i] - 2*self.current_velocity[i]
+                if(i == 2):
+                    self.error_value[i] = self.setpoint_velocity[i] - self.current_velocity[i]
+                else:
+                    self.error_value[i] = self.setpoint_velocity[i] - 2*self.current_velocity[i]
                 self.sum_error_value[i] = self.sum_error_value[i] + self.error_value[i]
                 self.change_in_error_value[i] = self.error_value[i] - self.prev_error_value[i]
                 self.prev_error_value[i] = self.error_value[i]
