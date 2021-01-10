@@ -3,7 +3,7 @@
 '''**********************************
 E-yantra
 Theme: Vitran Drone
-Task: task4
+Task: task3
 Purpose: Position controller
 Team ID : 0583
 Team name : !ABHIMANYU 
@@ -13,7 +13,6 @@ Team name : !ABHIMANYU
 from vitarana_drone.msg import *
 from pid_tune.msg import PidTune
 from sensor_msgs.msg import NavSatFix, Imu
-from geometry_msgs.msg import Vector3Stamped
 from std_msgs.msg import Float32, String, Int8, Float64
 import rospy
 import numpy as np
@@ -34,20 +33,14 @@ class Edrone():
 
     def __init__(self):
         # initializing ros node with name position_controller
-        rospy.init_node('position_controller4')
+        rospy.init_node('position_controller3')
 
         # This will contain the current location of Edrone. [latitude, longitude, altitude ]
         # this value is updating each time in gps callback function
         self.drone_location = [0.0, 0.0, 0.0]
 
-        # this value is updating each time in gps_velocity callback function
-        self.current_velocity = [0.0, 0.0, 0.0]
-
         # To store the intermediate setpoints. [latitude , longitude, altitude ]
         self.setpoint_location = [19.0, 72.0, 3.0]
-
-        # To store the intermediate setpoints. [latitude , longitude, altitude ]
-        self.setpoint_velocity = [0.0, 0.0, 0.0]
 
         # To store the final setpoint. [latitude , longitude, altitude ]
         self.setpoint_final = [19.0, 72.0, 3.0]
@@ -65,7 +58,6 @@ class Edrone():
         # This will contain the current orientation of eDrone converted in euler angles form. [r,p,y]
         self.drone_orientation_euler = [0.0, 0.0, 0.0]
 
-        # ////////////////////////////////////////////////////////////////////////////
         # To store values of LIDAR
         self.laser_negative_latitude = 0
         self.laser_positive_longitude = 0
@@ -102,6 +94,11 @@ class Edrone():
         self.altitude_Low = Float32()
         self.altitude_Low.data = -0.2
 
+        # initializing Kp, Kd and ki for [latitude, longitude, altitude] after tunning
+        self.Kp = [1080000, 1140000, 48]
+        self.Ki = [0, 0, 0]
+        self.Kd = [57600000, 57900000, 3000]
+
         # Declaring variable to store different error values, to be used in PID equations.
         self.change_in_error_value = [0.0, 0.0, 0.0]
         self.error_value = [0.0, 0.0, 0.0]
@@ -111,21 +108,15 @@ class Edrone():
         # Declaring maximum and minimum values for roll, pitch, yaw, throttle output.
         self.max_values = [2000.0, 2000.0, 2000.0, 2000.0]
         self.min_values = [1000.0, 1000.0, 1000.0, 1000.0]
-        # /////////////////////////////////////////////////////////////////////////
-
-        # initializing Kp, Kd and ki for position [latitude, longitude, altitude] after tunning
-        self.Kp_p = [1080000, 1140000, 48]
-        self.Ki_p = [0, 0, 0]
-        self.Kd_p = [57600000, 57900000, 3000]
-
-        # initializing Kp, Kd and ki for velocity [latitude, longitude, altitude] after tunning
-        self.Kp_v = [2.15, 2.15, 650]
-        self.Ki_v = [0, 0, 0]
-        self.Kd_v = [130, 130, 25]
 
         # Declaring variables for marker midpoint
         self.centre_x = -1
         self.centre_y = -1
+
+        # evaluating focal length of drone camera
+        # img_width = 400
+        # hfov_rad = 1.3962634 
+        # self.focal_length = (img_width/2)/math.tan(hfov_rad/2)
 
         self.buildings = {
                             1: [18.9990965928, 72.0000664814, 10.75],
@@ -136,17 +127,27 @@ class Edrone():
         self.visited = {1: False, 2: False, 3: False}
         
         # initializing Publisher for /drone_command, /latitude_error, /longitude_error, /altitude_error and tolerences
-        self.rpyt_pub = rospy.Publisher('/drone_command', edrone_cmd, queue_size=1)
-        self.latitude_error = rospy.Publisher('/latitude_error', Float32, queue_size=1)
-        self.longitude_error = rospy.Publisher('/longitude_error', Float32, queue_size=1)
-        self.altitude_error = rospy.Publisher('/altitude_error', Float32, queue_size=1)
+        self.rpyt_pub = rospy.Publisher(
+            '/drone_command', edrone_cmd, queue_size=1)
+        self.latitude_error = rospy.Publisher(
+            '/latitude_error', Float32, queue_size=1)
+        self.longitude_error = rospy.Publisher(
+            '/longitude_error', Float32, queue_size=1)
+        self.altitude_error = rospy.Publisher(
+            '/altitude_error', Float32, queue_size=1)
 
-        self.latitude_up = rospy.Publisher('/latitude_up', Float32, queue_size=1)
-        self.longitude_up = rospy.Publisher('/longitude_up', Float32, queue_size=1)
-        self.altitude_up = rospy.Publisher('/altitude_up', Float32, queue_size=1)
-        self.latitude_low = rospy.Publisher('/latitude_low', Float32, queue_size=1)
-        self.longitude_low = rospy.Publisher('/longitude_low', Float32, queue_size=1)
-        self.altitude_low = rospy.Publisher('/altitude_low', Float32, queue_size=1)
+        self.latitude_up = rospy.Publisher(
+            '/latitude_up', Float32, queue_size=1)
+        self.longitude_up = rospy.Publisher(
+            '/longitude_up', Float32, queue_size=1)
+        self.altitude_up = rospy.Publisher(
+            '/altitude_up', Float32, queue_size=1)
+        self.latitude_low = rospy.Publisher(
+            '/latitude_low', Float32, queue_size=1)
+        self.longitude_low = rospy.Publisher(
+            '/longitude_low', Float32, queue_size=1)
+        self.altitude_low = rospy.Publisher(
+            '/altitude_low', Float32, queue_size=1)
 
         self.vertical_distance_pub = rospy.Publisher('/edrone/vertical_distance', Float64, queue_size = 1)
 
@@ -157,17 +158,17 @@ class Edrone():
         # Subscribing to /edrone/gps, /pid_tuning_yawyawroll, /pid_tuning_pitch, /pid_tuning_yaw {used these GUIs only to tune ;-) }
         rospy.Subscriber('/edrone/gps', NavSatFix, self.gps_callback)
         rospy.Subscriber('/edrone/imu/data', Imu, self.imu_callback)
-        rospy.Subscriber('/edrone/gps_velocity', Vector3Stamped, self.velocity_callback )
-        rospy.Subscriber('/edrone/range_finder_top', LaserScan, self.range_finder_callback)
-        # rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)        # for latitude
+        # rospy.Subscriber('/pid_tuning_yawyawroll', PidTune, self.roll_set_pid)        # for latitude
         # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)      # for longitude
-        # rospy.Subscriber('/pid_tuning_yaw', PidTune, self.yaw_set_pid)          # for altitude
+        # rospy.Subscriber('/pid_tuning_yaw', PidTune, stablize_dronelf.yaw_set_pid)          # for altitude
         #rospy.Subscriber('/qrValue', String, self.qr_callback)
         #rospy.Subscriber('/pixValue', Int32MultiArray, self.marker_callback)
         rospy.Subscriber('/edrone/marker_data', MarkerData, self.marker_data_callback)
-
+        rospy.Subscriber('/edrone/range_finder_top',
+                         LaserScan, self.range_finder_callback)
 
     # Callback function for LaserScan
+
     def range_finder_callback(self, msg):
         if(self.drone_orientation_euler[2] < np.pi/4 and self.drone_orientation_euler[2] > -np.pi/4):
             self.laser_negative_longitude, self.laser_positive_latitude, self.laser_positive_longitude, self.laser_negative_latitude, _ = msg.ranges
@@ -182,13 +183,11 @@ class Edrone():
             self.laser_positive_latitude, self.laser_positive_longitude, self.laser_negative_latitude, self.laser_negative_longitude, _ = msg.ranges
         # print(self.laser_negative_latitude)
 
-
     def marker_data_callback(self, marker_data):
-        self.centre_x = self.drone_location[0] + marker_data.err_x_m*0.000004517*2
-        # self.centre_x = self.drone_location[0] + self.centre_x
-        self.centre_y = self.drone_location[1] - marker_data.err_y_m*0.0000047487*2
-        # self.centre_y = self.drone_location[1] - self.centre_y
-
+        self.centre_x = marker_data.err_x_m*0.000004517*2
+        self.centre_x = self.drone_location[0] + self.centre_x
+        self.centre_y = marker_data.err_y_m*0.0000047487*2
+        self.centre_y = self.drone_location[1] - self.centre_y
 
     # Imu callback function. The function gets executed each time when imu publishes /edrone/imu/data
     def imu_callback(self, msg):
@@ -200,39 +199,38 @@ class Edrone():
         #2 is yaw
         (self.drone_orientation_euler[1], self.drone_orientation_euler[0], self.drone_orientation_euler[2]) = tf.transformations.euler_from_quaternion(
             [self.drone_orientation_quaternion[0], self.drone_orientation_quaternion[1], self.drone_orientation_quaternion[2], self.drone_orientation_quaternion[3]])
-    
 
     # callback function for gps. This function gets executed each time when NavSatFix publishes /edrone/gps
-    def velocity_callback(self, msg):
-        self.current_velocity[0] = msg.vector.x
-        self.current_velocity[1] = -msg.vector.y 
-        self.current_velocity[2] = msg.vector.z
-        # print(self.current_velocity)
 
-
-    # callback function for gps. This function gets executed each time when NavSatFix publishes /edrone/gps
     def gps_callback(self, msg):
         self.drone_location[0] = msg.latitude
         self.drone_location[1] = msg.longitude
         self.drone_location[2] = msg.altitude
 
     # Callback function for /pid_tuning_roll, we used it to tune latitude
+    # This function gets executed each time when /tune_pid publishes /pid_tuning_roll
+
     def roll_set_pid(self, roll):
-        self.Kp_v[0] = roll.Kp * 0.001
-        self.Ki_v[0] = roll.Ki * 0.0001
-        self.Kd_v[0] = roll.Kd * 1
+        self.Kp[0] = roll.Kp * 600
+        self.Ki[0] = roll.Ki * 0.008
+        self.Kd[0] = roll.Kd * 30000
 
     # Callback function for /pid_tuning_pitch, we used it to tune longitude
+    # This function gets executed each time when /tune_pid publishes /pid_tuning_pitch
+
     def pitch_set_pid(self, pitch):
-        self.Kp_v[1] = pitch.Kp * 0.001
-        self.Ki_v[1] = pitch.Ki * 0.0001
-        self.Kd_v[1] = pitch.Kd * 1
+        self.Kp[1] = pitch.Kp * 600
+        self.Ki[1] = pitch.Ki * 0.008
+        self.Kd[1] = pitch.Kd * 30000
 
     # Callback function for /pid_tuning_yaw, we used it to tune altitude
+    # This function gets executed each time when /tune_pid publishes /pid_tuning_yaw
+
     def yaw_set_pid(self, yaw):
-        self.Kp_v[2] = yaw.Kp * 1
-        self.Ki_v[2] = yaw.Ki * 1
-        self.Kd_v[2] = yaw.Kd * 1
+        self.Kp[2] = yaw.Kp * 0.06
+        self.Ki[2] = yaw.Ki * 0.008
+        self.Kd[2] = yaw.Kd * 30
+
 
     # this function is containing all the pid equation to control the position of the drone
     def publish_data(self):
@@ -253,68 +251,35 @@ class Edrone():
         self.vertical_distance_pub.publish(self.drone_location[2] - self.buildings[self.current_marker_id][2])
         self.yaw_pub.publish(self.drone_orientation_euler[2])
 
-    # pid control loop
-    def pid(self, position, speed):
-        # if position is true, the drone will be position controlled else vellocity controlled
-        if(position):
-            for i in range(3):
-                self.error_value[i] = self.setpoint_location[i] - self.drone_location[i]
-                self.sum_error_value[i] = self.sum_error_value[i] + self.error_value[i]
-                self.change_in_error_value[i] = self.error_value[i] - self.prev_error_value[i]
-                self.prev_error_value[i] = self.error_value[i]
 
-            # assigning error value to its container to publish
-            self.latitude_Error.data = self.error_value[0]
-            self.longitude_Error.data = self.error_value[1]
-            self.altitude_Error.data = self.error_value[2]
+    def pid(self):
+        # updating all the error values to be used in PID equation
+        # rospy.Subscriber('/qrValue', String, self.qr_callback)
+        for i in range(3):
+            self.error_value[i] = self.setpoint_location[i] - \
+                self.drone_location[i]
+            self.sum_error_value[i] = self.sum_error_value[i] + \
+                self.error_value[i]
+            self.change_in_error_value[i] = self.error_value[i] - \
+                self.prev_error_value[i]
+            self.prev_error_value[i] = self.error_value[i]
 
-            # PID eqation for latitude
-            output0 = self.Kp_p[0]*self.error_value[0] + self.Ki_p[0] * \
-                self.sum_error_value[0] + self.Kd_p[0]*self.change_in_error_value[0]
+        # assigning error value to its container to publish
+        self.latitude_Error.data = self.error_value[0]
+        self.longitude_Error.data = self.error_value[1]
+        self.altitude_Error.data = self.error_value[2]
 
-            # PID eqation for longitude
-            output1 = self.Kp_p[1]*self.error_value[1] + self.Ki_p[1] * \
-                self.sum_error_value[1] + self.Kd_p[1]*self.change_in_error_value[1]
+        # PID eqation for latitude
+        output0 = self.Kp[0]*self.error_value[0] + self.Ki[0] * \
+            self.sum_error_value[0] + self.Kd[0]*self.change_in_error_value[0]
 
-            # PID equation for altitude
-            output2 = self.Kp_p[2]*self.error_value[2] + self.Ki_p[2] * \
-                self.sum_error_value[2] + self.Kd_p[2]*self.change_in_error_value[2]
+        # PID eqation for longitude
+        output1 = self.Kp[1]*self.error_value[1] + self.Ki[1] * \
+            self.sum_error_value[1] + self.Kd[1]*self.change_in_error_value[1]
 
-        else:
-            self.setpoint_velocity[0] = (self.setpoint_location[0] - self.drone_location[0])/0.000004517*2
-            self.setpoint_velocity[1] = (self.setpoint_location[1] - self.drone_location[1])/0.0000047487*2
-            self.setpoint_velocity[2] = (self.setpoint_location[2] - self.drone_location[2])
-            
-            # x = max(abs(self.setpoint_velocity[0]), max(abs(self.setpoint_velocity[1]), abs(self.setpoint_velocity[2])))
-            x = np.sqrt(self.setpoint_velocity[0]**2 + self.setpoint_velocity[1]**2 + self.setpoint_velocity[2]**2)
-            
-            if(x>speed):
-                self.setpoint_velocity[0] = self.setpoint_velocity[0]*speed/x
-                self.setpoint_velocity[1] = self.setpoint_velocity[1]*speed/x
-                self.setpoint_velocity[2] = self.setpoint_velocity[2]*speed/x
-
-            for i in range(3):
-                self.error_value[i] = self.setpoint_velocity[i] - 2*self.current_velocity[i]
-                self.sum_error_value[i] = self.sum_error_value[i] + self.error_value[i]
-                self.change_in_error_value[i] = self.error_value[i] - self.prev_error_value[i]
-                self.prev_error_value[i] = self.error_value[i]
-
-            # assigning error value to its container to publish
-            self.latitude_Error.data = self.setpoint_location[0] - self.drone_location[0]
-            self.longitude_Error.data = self.setpoint_location[1] - self.drone_location[1]
-            self.altitude_Error.data = self.setpoint_location[2] - self.drone_location[2]
-
-            # PID eqation for latitude
-            output0 = self.Kp_v[0]*self.error_value[0] + self.Ki_v[0] * \
-                self.sum_error_value[0] + self.Kd_v[0]*self.change_in_error_value[0]
-
-            # PID eqation for longitude
-            output1 = self.Kp_v[1]*self.error_value[1] + self.Ki_v[1] * \
-                self.sum_error_value[1] + self.Kd_v[1]*self.change_in_error_value[1]
-
-            # PID equation for altitude
-            output2 = self.Kp_v[2]*self.error_value[2] + self.Ki_v[2] * \
-                self.sum_error_value[2] + self.Kd_v[2]*self.change_in_error_value[2]
+        # PID equation for altitude
+        output2 = self.Kp[2]*self.error_value[2] + self.Ki[2] * \
+            self.sum_error_value[2] + self.Kd[2]*self.change_in_error_value[2]
 
         # updating the roll value according to PID output.
         # {this equation will work fine when there is some yaw. to see detail opne --> https://drive.google.com/file/d/14gjse4HUIi9OoznefjOehh1HU6LUhoO7/view?usp=sharing }
@@ -385,21 +350,21 @@ def is_at_setpoint2D(setpoint):
 
 
 # Function to avoid obstacles
-def stablize_drone(time_limit, position, speed):
+def stablize_drone(time_limit):
     t = time.time()
     while time.time() - t < time_limit:
-        e_drone.pid(position = position, speed = speed)
+        e_drone.pid()
         time.sleep(0.05)
 
 
 # function to avoid the obstacles dynamically
-def avoid_obstacle(position, speed):
+def avoid_obstacle():
     flag = 0
 
     # Obstacle on negative latitude and destination in negative latitude
     while(e_drone.laser_negative_latitude <= 10 and e_drone.laser_negative_latitude >= 0.5 and
             e_drone.setpoint_final[0] - e_drone.setpoint_initial[0] <= 0):
-        e_drone.pid(position = position, speed = speed)
+        e_drone.pid()
         time.sleep(0.05)
         e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000020 * \
             np.sign(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])
@@ -413,7 +378,7 @@ def avoid_obstacle(position, speed):
     # Move the drone further away from obstacle ( Corner Case )
     if(flag == 1):
         for _ in range(100):
-            e_drone.pid(position = position, speed = speed)
+            e_drone.pid()
             time.sleep(0.05)
             e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000020*np.sign(
                 e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])
@@ -421,7 +386,7 @@ def avoid_obstacle(position, speed):
     # Obstacle on positive latitude and destination in positive latitude
     while(e_drone.laser_positive_latitude <= 10 and e_drone.laser_positive_latitude >= 0.5 and
           e_drone.setpoint_final[0] - e_drone.setpoint_initial[0] >= 0):
-        e_drone.pid(position = position, speed = speed)
+        e_drone.pid()
         time.sleep(0.05)
         e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000020 * \
             np.sign(e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])
@@ -435,7 +400,7 @@ def avoid_obstacle(position, speed):
     # Move the drone further away from obstacle ( Corner Case )
     if(flag == 2):
         for _ in range(100):
-            e_drone.pid(position = position, speed = speed)
+            e_drone.pid()
             time.sleep(0.05)
             e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000020*np.sign(
                 e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])
@@ -443,7 +408,7 @@ def avoid_obstacle(position, speed):
     # Obstacle on negative longitude and destination in negative longitude
     while(e_drone.laser_negative_longitude <= 10 and e_drone.laser_negative_longitude >= 0.5 and
             e_drone.setpoint_final[1] - e_drone.setpoint_initial[1] <= 0):
-        e_drone.pid(position = position, speed = speed)
+        e_drone.pid()
         time.sleep(0.05)
         # print(e_drone.laser_negative_longitude)
         e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000020 * \
@@ -459,7 +424,7 @@ def avoid_obstacle(position, speed):
     if(flag == 3):
         for _ in range(100):
             # print(e_drone.laser_negative_longitude)
-            e_drone.pid(position = position, speed = speed)
+            e_drone.pid()
             time.sleep(0.05)
             e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000020*np.sign(
                 e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])
@@ -467,7 +432,7 @@ def avoid_obstacle(position, speed):
     # Obstacle on positive longitude and destination is positive longitude
     while(e_drone.laser_positive_longitude <= 10 and e_drone.laser_positive_longitude >= 0.5 and
             e_drone.setpoint_final[1] - e_drone.setpoint_initial[1] >= 0):
-        e_drone.pid(position = position, speed = speed)
+        e_drone.pid()
         time.sleep(0.05)
         e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000020 * \
             np.sign(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])
@@ -479,7 +444,7 @@ def avoid_obstacle(position, speed):
 
     if(flag == 4):
         for _ in range(100):
-            e_drone.pid(position = position, speed = speed)
+            e_drone.pid()
             time.sleep(0.05)
             e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000020*np.sign(
                 e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])
@@ -491,7 +456,7 @@ def avoid_obstacle(position, speed):
               (e_drone.laser_negative_longitude <= 4 and e_drone.laser_negative_longitude >= 0.5) or
               (e_drone.laser_negative_longitude <= 4 and e_drone.laser_negative_longitude >= 0.5)):
 
-            e_drone.pid(position = position, speed = speed)
+            e_drone.pid()
             time.sleep(0.05)
             e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [
                 e_drone.drone_location[2] + 0.5]
@@ -499,87 +464,68 @@ def avoid_obstacle(position, speed):
         e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [
             e_drone.drone_location[2] + 3]
         while (is_at_setpoint3D(e_drone.setpoint_location)):
-            e_drone.pid(position = position, speed = speed)
+            e_drone.pid()
             time.sleep(0.05)
 
     # For stablization
     if(flag != 0):
-        stablize_drone(time_limit = 10, position = position, speed = speed)
+        stablize_drone(time_limit = 10)
         e_drone.setpoint_initial[0] = e_drone.drone_location[0]
         e_drone.setpoint_initial[1] = e_drone.drone_location[1]
         e_drone.setpoint_initial[2] = e_drone.drone_location[2]
 
 
 # this function will take the drone to the set point
-def reach_destination(height_corection, position, speed):
-    if(not position):
-        if(height_corection):
+def reach_destination(flag, speed):
+
+    if(flag):
+        # Incease altitude of drone to 30 if it is lower
+        if(e_drone.setpoint_final[2] > e_drone.drone_location[2] or e_drone.drone_location[2] < 24):
             e_drone.setpoint_location = e_drone.drone_location[:-1] + [30]
-            while is_at_setpoint3D(e_drone.setpoint_location):
-                e_drone.pid(position = position, speed = speed)
+            while(is_at_setpoint3D(e_drone.setpoint_location)):
+                e_drone.pid()
                 time.sleep(0.05)
 
-        e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.drone_location[2]]
-        while is_at_setpoint2D(e_drone.setpoint_location):
-            e_drone.pid(position = position, speed = speed)
-            time.sleep(0.05)
-        stablize_drone(time_limit = 5, position = position, speed = speed)
+        stablize_drone(time_limit = 5)
 
+    e_drone.setpoint_initial[0] = e_drone.drone_location[0]
+    e_drone.setpoint_initial[1] = e_drone.drone_location[1]
+    e_drone.setpoint_initial[2] = e_drone.drone_location[2]
+    e_drone.setpoint_location[0] = e_drone.setpoint_initial[0]
+    e_drone.setpoint_location[1] = e_drone.setpoint_initial[1]
+    e_drone.setpoint_location[2] = e_drone.setpoint_initial[2]
+    multiplier = 0.000010*speed
 
-        e_drone.setpoint_location = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[2]]
-        while is_at_setpoint3D(e_drone.setpoint_location):
-            e_drone.pid(position = position, speed = speed)
-            time.sleep(0.05)
-        
+    while(is_at_setpoint2D(e_drone.setpoint_final)):
+        e_drone.pid()
+        time.sleep(0.05)
 
-    else:
-        if(height_corection):
-            # Incease altitude of drone to 30 if it is lower
-            if(e_drone.setpoint_final[2] > e_drone.drone_location[2] or e_drone.drone_location[2] < 24):
-                e_drone.setpoint_location = e_drone.drone_location[:-1] + [30]
-                while(is_at_setpoint3D(e_drone.setpoint_location)):
-                    e_drone.pid(position = position, speed = speed)
-                    time.sleep(0.05)
-            stablize_drone(time_limit = 5, position = position, speed = speed)
+        divider = np.sqrt((e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])**2 + (
+            e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])**2)
 
-        e_drone.setpoint_initial[0] = e_drone.drone_location[0]
-        e_drone.setpoint_initial[1] = e_drone.drone_location[1]
-        e_drone.setpoint_initial[2] = e_drone.drone_location[2]
-        e_drone.setpoint_location[0] = e_drone.setpoint_initial[0]
-        e_drone.setpoint_location[1] = e_drone.setpoint_initial[1]
-        e_drone.setpoint_location[2] = e_drone.setpoint_initial[2]
-        multiplier = 0.000010*speed
+        if((e_drone.setpoint_location[0] > e_drone.setpoint_final[0]+0.0000150517 or
+            e_drone.setpoint_location[0] < e_drone.setpoint_final[0]-0.0000150517) or
+                (e_drone.setpoint_location[1] > e_drone.setpoint_final[1]+0.00001507487 or
+                    e_drone.setpoint_location[1] < e_drone.setpoint_final[1]-0.00001507487)):
 
-        while(is_at_setpoint2D(e_drone.setpoint_final)):
-            e_drone.pid(position = position, speed = speed)
-            time.sleep(0.05)
+            e_drone.setpoint_location[0] = e_drone.drone_location[0] + multiplier*(
+                e_drone.setpoint_final[0] - e_drone.drone_location[0]) / divider
+            e_drone.setpoint_location[1] = e_drone.drone_location[1] + multiplier*(
+                e_drone.setpoint_final[1] - e_drone.drone_location[1]) / divider
 
-            divider = np.sqrt((e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])**2 + (
-                e_drone.setpoint_final[1] - e_drone.setpoint_initial[1])**2)
+        else:
+            e_drone.setpoint_location[0] = e_drone.setpoint_final[0]
+            e_drone.setpoint_location[1] = e_drone.setpoint_final[1]
 
-            if((e_drone.setpoint_location[0] > e_drone.setpoint_final[0]+0.0000150517 or
-                e_drone.setpoint_location[0] < e_drone.setpoint_final[0]-0.0000150517) or
-                    (e_drone.setpoint_location[1] > e_drone.setpoint_final[1]+0.00001507487 or
-                        e_drone.setpoint_location[1] < e_drone.setpoint_final[1]-0.00001507487)):
+        avoid_obstacle()
 
-                e_drone.setpoint_location[0] = e_drone.drone_location[0] + multiplier*(
-                    e_drone.setpoint_final[0] - e_drone.drone_location[0]) / divider
-                e_drone.setpoint_location[1] = e_drone.drone_location[1] + multiplier*(
-                    e_drone.setpoint_final[1] - e_drone.drone_location[1]) / divider
+    stablize_drone(time_limit = 5)
 
-            else:
-                e_drone.setpoint_location[0] = e_drone.setpoint_final[0]
-                e_drone.setpoint_location[1] = e_drone.setpoint_final[1]
-
-            avoid_obstacle(position = position, speed = speed)
-
-        stablize_drone(time_limit = 5, position = position, speed = speed)
-
-        # Descending the drone on the setpoint
-        e_drone.setpoint_location = e_drone.setpoint_final
-        while (is_at_setpoint3D(e_drone.setpoint_location)):
-            e_drone.pid(position = position, speed = speed)
-            time.sleep(0.05)
+    # Descending the drone on the setpoint
+    e_drone.setpoint_location = e_drone.setpoint_final
+    while (is_at_setpoint3D(e_drone.setpoint_location)):
+        e_drone.pid()
+        time.sleep(0.05)
 
 
 def find_nearest_building():
@@ -597,20 +543,21 @@ def find_nearest_building():
 
 # main function, it will move the drone at all three points to reach the destination.
 def main():
-     # going to pick the box
+    # going to pick the box
     for i in range(len(e_drone.buildings.keys())):
         
         find_nearest_building()
         
         e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 1]
         rospy.loginfo("going to Building "+ str(e_drone.current_marker_id)+ " at "+ str(e_drone.setpoint_final))
-        reach_destination(height_corection = True, position= False, speed = 100)
-        
+        reach_destination(flag = 1, speed = 5)
+        # To settle on the destination
+        stablize_drone(time_limit = 5)
         rospy.loginfo("Reached Building "+ str(e_drone.current_marker_id))
         
-        e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 13]
-        reach_destination(height_corection = False, position = False, speed = 100)
-
+        e_drone.setpoint_final = e_drone.setpoint_final[:-1] + [e_drone.setpoint_final[-1] + 15]
+        reach_destination(flag = 0, speed = 5)
+        stablize_drone(time_limit = 5)
         rospy.loginfo("Initiating marker detection")
 
         count = 0
@@ -637,7 +584,8 @@ def main():
                         e_drone.setpoint_final = [e_drone.drone_location[0], e_drone.drone_location[1] + (count3+1)*0.0000047487*5, e_drone.drone_location[-1] ]
                     elif(count3%4 ==3 ):
                         e_drone.setpoint_final = [e_drone.drone_location[0] - (count3+1)*0.000004517*5, e_drone.drone_location[1] , e_drone.drone_location[-1] ]
-                    reach_destination(height_corection = False, position = False, speed = 100)
+                    reach_destination(flag = 0, speed = 2)
+                    stablize_drone(time_limit = 10)
 
                     count3 +=1
             else:           
@@ -647,7 +595,7 @@ def main():
             
             prev_x, prev_y = e_drone.centre_x, e_drone.centre_y
 
-            stablize_drone(time_limit = 0.5, position = False, speed = 100)
+            stablize_drone(time_limit = 1)
 
         x /= count
         y /= count
@@ -657,8 +605,8 @@ def main():
         else: 
             e_drone.setpoint_final = [x,y, e_drone.buildings[e_drone.current_marker_id][2]+5]
         #print("marker found at ", e_drone.setpoint_final)
-        reach_destination(height_corection=False, position = False, speed=100)
-        stablize_drone(time_limit = 1, position = False, speed = 100)
+        reach_destination(flag=0, speed=4)
+        stablize_drone(time_limit = 15)
         rospy.loginfo("Reached marker"+ str(e_drone.current_marker_id))
 
 
@@ -669,7 +617,6 @@ def main():
         e_drone.rpyt_cmd.rcPitch = 1500
         e_drone.rpyt_cmd.rcThrottle = 1000
         e_drone.rpyt_pub.publish(e_drone.rpyt_cmd)
-
 
 if __name__ == '__main__':
 
