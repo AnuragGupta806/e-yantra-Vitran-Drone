@@ -399,7 +399,8 @@ def stablize_drone(time_limit, position, speed):
 def avoid_obstacle(position, speed):
     print("obstacles")
     flag = 0
-    m =5
+    m =7
+    x = 70
     # Obstacle on negative latitude and destination in negative latitude
     while(e_drone.laser_negative_latitude <= 15 and e_drone.laser_negative_latitude >= 0.5 and
             e_drone.setpoint_final[0] - e_drone.drone_location[0] <= 0):
@@ -416,7 +417,7 @@ def avoid_obstacle(position, speed):
 
     # Move the drone further away from obstacle ( Corner Case )
     if(flag == 1):
-        for _ in range(100):
+        for _ in range(x):
             e_drone.pid(position = position, speed = speed)
             time.sleep(0.05)
             e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000020*m*np.sign(
@@ -438,7 +439,7 @@ def avoid_obstacle(position, speed):
 
     # Move the drone further away from obstacle ( Corner Case )
     if(flag == 2):
-        for _ in range(100):
+        for _ in range(x):
             e_drone.pid(position = position, speed = speed)
             time.sleep(0.05)
             e_drone.setpoint_location[1] = e_drone.drone_location[1] + 0.0000020*m*np.sign(
@@ -461,7 +462,7 @@ def avoid_obstacle(position, speed):
 
     # Move the drone further away from obstacle ( Corner Case )
     if(flag == 3):
-        for _ in range(100):
+        for _ in range(x):
             # print(e_drone.laser_negative_longitude)
             e_drone.pid(position = position, speed = speed)
             time.sleep(0.05)
@@ -477,12 +478,13 @@ def avoid_obstacle(position, speed):
             np.sign(e_drone.setpoint_final[0] - e_drone.setpoint_initial[0])
         flag = 4
 
-        if((e_drone.laser_negative_latitude <= 6 and e_drone.laser_negative_latitude >= 0.5) or (e_drone.laser_positive_latitude <= 6 and e_drone.laser_positive_latitude >= 0.5)):
+        if((e_drone.laser_negative_latitude <= 6 and e_drone.laser_negative_latitude >= 0.5) or 
+            (e_drone.laser_positive_latitude <= 6 and e_drone.laser_positive_latitude >= 0.5)):
             flag = 5
             break
 
     if(flag == 4):
-        for _ in range(100):
+        for _ in range(x):
             e_drone.pid(position = position, speed = speed)
             time.sleep(0.05)
             e_drone.setpoint_location[0] = e_drone.drone_location[0] + 0.0000020*m*np.sign(
@@ -497,11 +499,9 @@ def avoid_obstacle(position, speed):
 
             e_drone.pid(position = position, speed = speed)
             time.sleep(0.05)
-            e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [
-                e_drone.drone_location[2] + 0.5]
+            e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 1]
 
-        e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [
-            e_drone.drone_location[2] + 3]
+        e_drone.setpoint_location = e_drone.setpoint_location[:-1] + [e_drone.drone_location[2] + 3]
         while (is_at_setpoint3D(e_drone.setpoint_location)):
             e_drone.pid(position = position, speed = speed)
             time.sleep(0.05)
@@ -713,8 +713,9 @@ def find_nearest_building():
 def main():
     find_nearest_building()
     temp_loc = e_drone.drone_location[:]
-    e_drone.setpoint_final = [19.0007046575, 71.9998955286, 23]
     # e_drone.setpoint_final = [19, 72, 23]
+    # reach_destination(height_corection = True, position = False, speed = 100)
+    e_drone.setpoint_final = [19.0007046575, 71.9998955286, 23]
     reach_destination(height_corection = True, position = False, speed = 100)
     print("reach dest.")
     e_drone.setpoint_final = temp_loc
