@@ -87,5 +87,5 @@ This task requires us to submit a one-shot demonstration video of our implementa
 
 #### [Task 6 Original Configuration Video](https://www.youtube.com/watch?v=suwiMgRNqbg)
 
-#### [Task 6 Bonus COnfiguration Video](https://www.youtube.com/watch?v=aAZl6m6CFOg)
+#### [Task 6 Bonus Configuration Video](https://www.youtube.com/watch?v=aAZl6m6CFOg)
 
