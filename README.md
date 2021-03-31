@@ -20,7 +20,7 @@ This competition conducted as a series of tasks, and our final problem statement
 The aim of this task is to get you started with installation of required software components like ROS Melodic and Gazebo.
 
 
-<img src="https://github.com/AnuragGupta806/e-yantra-Vitran-Drone/blob/main/screenshots/ubuntu-logo.jpg" width="300" height="300"><img src="https://github.com/AnuragGupta806/e-yantra-Vitran-Drone/blob/main/screenshots/melodic_logo.jpg" width="300" height="300"><img src="https://github.com/AnuragGupta806/e-yantra-Vitran-Drone/blob/main/screenshots/gazebo.png" width="300" height="300">
+<img src="https://github.com/AnuragGupta806/e-yantra-Vitran-Drone/blob/main/screenshots/ubuntu-logo.jpg" width="300" height="300"><img src="https://github.com/AnuragGupta806/e-yantra-Vitran-Drone/blob/main/screenshots/melodic_logo.jpg" width="300" height="300"><img src="https://github.com/AnuragGupta806/e-yantra-Vitran-Drone/blob/main/screenshots/gazebo.png" width="250" height="300">
 
 ## Task 1
 The aim of this task is to design controllers which will control the eDrone's orientation as well as position in Gazebo environment namely attitude and position controller scripts.
