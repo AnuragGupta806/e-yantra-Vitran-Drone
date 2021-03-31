@@ -1,4 +1,5 @@
 # e-yantra-Vitran-Drone
+
 e-Yantra Robotics Competition (eYRC) is a unique annual competition launched in the month of August every year for undergraduate students in science and engineering colleges, polytechnic. Selected teams are given a robotic kit complete with accessories and video tutorials to help them learn basic concepts in embedded systems and microcontroller programming. Abstracts of real world problems assigned as "themes" are then implemented by the teams using the robotic kits.
 
 Hosted by IIT Bombay and sponsored by Ministry of Education of India
@@ -87,3 +88,4 @@ This task requires us to submit a one-shot demonstration video of your implement
 #### [Task 6 Original Configuration Video](https://www.youtube.com/watch?v=suwiMgRNqbg)
 
 #### [Task 6 Bonus COnfiguration Video](https://www.youtube.com/watch?v=aAZl6m6CFOg)
+
