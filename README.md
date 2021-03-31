@@ -72,13 +72,13 @@ The main aim of this task is to complete a set of deliveries and returns warehou
 #### [Task 5 Video](https://www.youtube.com/watch?v=lXq_zCh0268)
 
 ## Task 6
-This is the final task which is complete theme implementation. The aim of this task is to complete a set of deliveries and returns in the most efficient order form warehouse location to their destinations or vice versa in the most efficient order to maximize the earnings produced from each delivery or return.
+This is the final task which is the complete theme implementation. The aim of this task is to complete a set of deliveries and returns from warehouse location to their destinations or vice versa in the most efficient order to maximize the earnings produced from each delivery or return.
 
 This task had two sub task using:
 - Original Configuration
 - Bonus Configuration
 
-This task requires us to submit a one-shot demonstration video of your implementation for a given Original Configuration. We can also opt to try Bonus Configuration only after submitting Original Configuration(which we did).
+This task requires us to submit a one-shot demonstration video of our implementation for a given Original Configuration. We can also opt to try Bonus Configuration only after submitting Original Configuration(which we did).
 
 <img src="https://github.com/AnuragGupta806/e-yantra-Vitran-Drone/blob/main/screenshots/task6marker.png" width="900" height="500">  
 
